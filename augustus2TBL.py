@@ -20,11 +20,6 @@ def cut(GffL_elementL): ##separate each feature of each genes
 		DishL = [x for x in EdibleL if x[2] == i]
 		EatL.append(DishL)	
 
-	#print("EACH LEN #####") ##DEBUG
-	#print(len(MiscL)) ##DEBUG
-	#print(len(TasteL)) ##DEBUG
-	#print(len(EatL)) ##DEBUG
-
 	return [MiscL,TasteL,EatL]
 
 def pick(CutL,SelectedTasteL):
@@ -40,8 +35,6 @@ class Fruit(object):
 	def __init__(self,GffL_elementL):
 		self.GffL_elementL = GffL_elementL
 		self.CutL = cut(self.GffL_elementL)
-		#print("self.CutL[2])") ##DEBUG
-		#for i in self.CutL[2]:print(str(i)) ##DEBUG
 		self.PeelL = self.CutL[0] ## augustus commnet part
 		self.TypeL = self.CutL[1] ## feature types 
 		self.PulpL = []
@@ -58,14 +51,10 @@ class Fruit(object):
 class Piece(object):
 	def __init__(self,gffRow):
 		self.gffRowL = gffRow
-		#print("self.gffRowL") ##DEBUG
-		#print(str(self.gffRowL)) ##DEBUG
 		self.pieceL = [self.gffRowL[0:8],self.shew(self.gffRowL)]
 		
 	def shew(self,Pulp):		
 		LastColumnL = [x.strip()+'"' for x in Pulp[8].split('";')]
-		#print("LastColumnL") ##DEBUG
-		#print(str(LastColumnL)) ##DEBUG
 		if len(LastColumnL) > 1:
 			TEMPL = [x.split() for x in  LastColumnL if len(x.split()) > 1]
 			KL,VL = [x[0] for x in TEMPL ],[' '.join(x[1:]) for x in TEMPL] #generate Key and Value
@@ -78,40 +67,11 @@ class Piece(object):
 def TestMain():
 
 	chopedL = chop(Gffs)[:] 
-	#for i in chopedL:
-	#	for ii in i:
-	#		print(ii)
-	#	print("#########")
 
 	SelectedTasteL = ['gene', 'transcript', 'intron', 'CDS'] 
-#	for pieceE in chopedL:
-#		CutL = cut(pieceE)
-#		print(CutL[1])
-#		print(CutL[2])
-#		print("#########")
-#
-#		pickL = pick(CutL[2],SelectedTasteL)
-#		for i in pickL:
-#			print(i)
-#			print("for i in pickL ######") 
-
 	ContigTagS = ''
 	for pieceE in chopedL: 
 		FruitOBJ = Fruit(pieceE)
-		#print("str(FruitOBJ.TypeL) <<<<<")
-		#print(FruitOBJ.TypeL)
-		#print("str(FruitOBJ.PulpL) <<<<<")
-		#for piece in FruitOBJ.PulpL:		
-		#	print(piece)
-		#	print("SEP####")
-
-		#print("DISHL")
-		#for group in FruitOBJ.DishL:
-		#	print(group)
-		#	print("SEP####")
-
-		#print("****GENE*****")
-		FirstRowL = [x for x in FruitOBJ.DishL if x[0][0][2] == "gene"][0][0]
 		geneL = FirstRowL[0]
 		
 		if ContigTagS != geneL[0]:
@@ -121,12 +81,10 @@ def TestMain():
 		print("\t"*3 + "locus_tag" + "\t" + FirstRowL[1]['gene_id'])
 
 		TranscriptL = [x for x in FruitOBJ.DishL if x[0][0][2] == "transcript"][0]
-		#print(str(TranscriptL)) ##DEBUG
 		print (TranscriptL[0][0][3]+"\t"+TranscriptL[0][0][4] + "\tmRNA")
 		for i in TranscriptL[1:]:
 			print(i[0][3]+"\t"+i[0][4])
 
-		#print("\t*3"+"product")
 		productS = [x for x in FruitOBJ.DishL if x[0][0][2] == "gene"][0][0][1]['product']
 		qualifierS = ''
 		qualifierS = qualifierS + "\t"*3+"product"+"\t"+ productS + "\n"
@@ -137,7 +95,6 @@ def TestMain():
 		print(qualifierS)
 
 		CDS_L = [x for x in FruitOBJ.DishL if x[0][0][2] == "CDS"][0]
-		#print(str(TranscriptL)) ##DEBUG
 		print (CDS_L[0][0][3]+"\t"+CDS_L[0][0][4] + "\tCDS")
 		for i in CDS_L[1:]:
 			print(i[0][3]+"\t"+i[0][4])
@@ -146,15 +103,4 @@ def TestMain():
 
 Gffs = sys.stdin.read()
 TestMain()
-
-
-
-
-
-
-
-
-
-
-
 
