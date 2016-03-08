@@ -1,1 +1,2 @@
+#USAGE sh select_fastaLen.sh FASTA_FILE CUTOFF_LENGHT, NEGATIVE VALUE MEAN SELECT SEQUENCES WITH SHORTER THAN THIS NUMBER (eg. sh select_fastaLen.sh input.fasta -200)  
 more $1 | awk '{if  ($0 ~ /^>/) print "#"$0"#";else print $0}' | tr -d '\n\r' | sed "s/#/\n/g"  | awk '{if ($0 ~ /^>/) print "#"$0"#";else print $0"#\t"length($0) }' | tr -d '\n\r' | sed "s/#>/\n>/g" | awk  -v SEQLEN=$2 '{ if ( SEQLEN > 0) {if ($2 > SEQLEN ) print $0} else if ($2 < (SEQLEN*-1) ) print $0 }' | awk '{print $1}' | tr '#' '\n' | grep -v "^$" |  sed "s/.\{60\}/&\n/g" 
