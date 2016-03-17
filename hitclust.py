@@ -1,5 +1,6 @@
 #!/usr/bin/python
 ## hitclust10_j.py
+##written by Tanawut Srisuk
 
 ##add clustalw alignment program option [-a 2]
 ##20121128:change fastacmd arg to get lenght from 100000000 to 1000000000
@@ -263,7 +264,7 @@ def remains(tempL,Mhead,Mtail):
 				temp[8] = i[9] + tremainI
 			remainL.append(temp)
 #			print "tremainI >= 50:" ##DEBUG
-	sys.stderr.write(str(remainL)+'\n')
+	#sys.stderr.write(str(remainL)+'\n')
 	remainL = [x for x in remainL if (abs(x[9] - x[8]) + 1) >= 50]
 	return remainL
 
@@ -457,6 +458,7 @@ def GPjoin(eachL):
 
 ## +++++++ getAlign() ++++++++++++++++++++++++
 def getAlign3(DB,qeury,clust):
+	#print("DB,qeury,clust in getAlign3="+str([DB,qeury,clust])) ##DEBUG
 	qStartL = [int(x[6]) for x in clust]
 	#qStartL.sort()
 	#Qhead = qStartL[0]; del qStartL #old
@@ -469,13 +471,14 @@ def getAlign3(DB,qeury,clust):
 
 	qname = clust[0][0] ### clean query name before get string
 	align = Qseqjuice5(qeury,qname,Qhead,Qtail); #del qname, Qhead, Qtail
-
+	#print("align in getAlign3="+align) ##DEBUG
 	SL = clust
 	SL = [[x[i] for i in (1,8,9)] for x in SL]
 
 	for i in  SL:
 		
 		Sseq = getSseq4(DB,i[0],i[1],i[2])
+		#print("Sseq in getAlign3="+Sseq) ##DEBUG
 		align += Sseq
 	return align
 	
@@ -502,12 +505,14 @@ def  Qseqjuice5(query,name,Qhead,Qtail):
 	if tail > seqlen:
 		tail = seqlen
 
-	arg = """fastacmd -p F -d __DBNAME__ -s "__name__" -L __head__,__tail__ ;"""
+	#arg = """fastacmd -p F -d __DBNAME__ -s "__name__" -L __head__,__tail__ ;"""
+	arg = """fastacmd  -d __DBNAME__ -s "__name__" -L __head__,__tail__ ;"""
 	arg = arg.replace('__DBNAME__',query)
 	arg = arg.replace('__name__',name)
 	arg = arg.replace('__head__',str(head))
 	arg = arg.replace('__tail__',str(tail))
 
+	#print("Qseqjuice5 arg="+arg) ##DEBUG
 	process = subprocess.Popen(arg, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 	x = process.communicate()
 	
@@ -540,8 +545,10 @@ def reversecomplement(string):
 ## getSseq4(DBname,Scontigname,Shead,Stail)
 def getSseq4(DBname,Scontigname,Shead,Stail):
 #	print DBname,Scontigname,Shead,Stail ##DEBUG
-	arg1 = "fastacmd -p F -d "+DBname+" -s \""+Scontigname+"\" -L "+str(Shead)+","+str(Stail)+" ;"
-	arg2 = "fastacmd -p F -S 2 -d "+DBname+" -s \""+Scontigname+"\" -L "+str(Stail)+","+str(Shead)+" ;"
+	#arg1 = "fastacmd -p F -d "+DBname+" -s \""+Scontigname+"\" -L "+str(Shead)+","+str(Stail)+" ;"
+	arg1 = "fastacmd -d "+DBname+" -s \""+Scontigname+"\" -L "+str(Shead)+","+str(Stail)+" ;"
+	#arg2 = "fastacmd -p F -S 2 -d "+DBname+" -s \""+Scontigname+"\" -L "+str(Stail)+","+str(Shead)+" ;"
+	arg2 = "fastacmd -S 2 -d "+DBname+" -s \""+Scontigname+"\" -L "+str(Stail)+","+str(Shead)+" ;"
 		
 	if int(Shead) < int(Stail):		
 		arg = arg1
@@ -632,24 +639,33 @@ def MSAgen4(align,Ip):
 
 ## +++++ MSAgen5() +++++
 ## rename for all alignment program
-def MSAgen5(align,Ip):
-
+def MSAgen5(alignS,Ip):
+	
+	align = alignS
+	#print("alignS before short="+align) ##DEBUG
 	Dn = shortname(align)
+	#print("Dn="+str(Dn)) ##DEBUG
 	for n in Dn: ##to short name in alignment
 		label = len(Dn[n]) - len(n)
 		label = n+' '*label
 		align = align.replace(Dn[n],label)
-		#print align
-	f = open('TEMPseqs','w')
-	f.write(align)
-	f.close()
+	#print("align="+align) ##DEBUG
+
+	if Ip != '0':
+		f = open('TEMPseqs','w')
+		f.write(align)
+		f.close()
+
+	arg = ''
 
 	if Ip == '0':
-	        arg = "echo \'##########\n\' ; muscle -clwstrict -gapopen __GAP__ -maxiters 32 -quiet"
+		#arg = """echo \'##########\n\' ; muscle -in TEMPseqs -clwstrict -gapopen __GAP__ -maxiters 32 -quiet"""
+		arg = """echo \'##########\n\' ; muscle -clwstrict -gapopen __GAP__ -maxiters 32 -quiet"""
 		arg = arg.replace("__GAP__",GAP)
 
 		process = subprocess.Popen(arg, shell=True, stdin=subprocess.PIPE,stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 		x = process.communicate(align)
+		#x = process.communicate()
 		#x = x[0]
 
 	elif Ip == '1':
@@ -667,14 +683,16 @@ def MSAgen5(align,Ip):
 		x = process.communicate()
 		del x
 
-		arg = """echo \'##########\n\nCLUSTAL W (1.81) multiple sequence alignment' ;cat TEMPseqs.aln | grep -v "CLUSTAL 2.1 multiple sequence alignment"  """
+		arg = """echo \'##########\n\nCLUSTAL W (1.81) multiple sequence alignment' ;cat TEMPseqs.aln | grep -v "CLUSTAL 2.1 multiple sequence alignment";rm TEMPseqs.aln  """
 
 		process2 = subprocess.Popen(arg, shell=True, stdin=subprocess.PIPE,stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 		x = process2.communicate()
 		
 		
-
+	
 	alignout = x[0]
+	#print("arg="+arg) ##DEBUG
+	#print("alignout="+alignout) ##DEBUG
 	if Ip == '0':
 		name = "S1S"
 		alignout = AlignReOrder(alignout,name)
@@ -689,6 +707,7 @@ def MSAgen5(align,Ip):
 #		print Ilngth  ##DEBUG
 		Klngth = max([len(x) for x in Dn.keys()])
 #		print Klngth  ##DEBUG
+		
 		for n in Dn: ##to short name in alignment
 			label = Ilngth - len(Dn[n])
 			label = Dn[n]+' '*label
@@ -756,15 +775,16 @@ def seqLIM3(dbpath,col):
 
 def fastacmdcall2(dbpath,name):
 
-	sys.stderr.write(dbpath+" "+name+"\n")  ##DEBUG
+	#sys.stderr.write(dbpath+" "+name+"\n")  ##DEBUG
 	arg = """fastacmd -d __dbpath__ -s "__name__" -L 0,1000000000 > /dev/null"""
 	arg = arg.replace('__dbpath__',dbpath); arg = arg.replace('__name__',name)
 	process = subprocess.Popen(arg, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 	x = process.communicate()[1]
+	#x = process.communicate()[0]
 
 	seq_lim = x[:]
-        seq_lim = seq_lim.split("ERROR: From location cannot be greater than ")[1]
-        seq_lim = int(seq_lim.split(". Ignoring sequence")[0])
+	seq_lim = seq_lim.split("ERROR: From location cannot be greater than ")[1]
+	seq_lim = int(seq_lim.split(". Ignoring sequence")[0])
 
 	del process
 	return seq_lim
@@ -835,8 +855,8 @@ def main2(DB,query):
 	if outname != "0":
 		fout = open(outname,'w')
 #	print "nameL=",[x for x in nameL]##DEBUG
-	sys.stderr.write("enter MAIN loop\n")
-	sys.stderr.write("nameL length ="+str(len(nameL))+" \n")
+	#sys.stderr.write("enter MAIN loop\n")
+	#sys.stderr.write("nameL length ="+str(len(nameL))+" \n")
 	for i in nameL[:]:
 
 		hits = contigJuice(blasthit,i)
@@ -847,7 +867,7 @@ def main2(DB,query):
 		
 		#clustL = clustL[0:20] ##<<<<<<<<<< set for testing <<<<<<< ##DEBUG
 		x = 0
-		sys.stderr.write("clustL length ="+str(len(clustL))+" \n")
+		#sys.stderr.write("clustL length ="+str(len(clustL))+" \n")
 		for i in clustL[:]:
 			#sys.stderr.write("#FOR I IN CLUSTL #####\n") ##DEBUG
 			#sys.stderr.write("each clust="+str(i)+"\n<<<<<<<<<<<<<<<<<<<<<<<<<DEBUG") ##DEBUG
@@ -860,14 +880,19 @@ def main2(DB,query):
 				#sys.stderr.write("\n"+str(xi)+"\n<<<<<<<<<<<<<<<<<<<<<<<<<DEBUG") ##DEBUG
 				#xi = chop2(xi)[0]
 				#print len(i) ##DEBUG
-			xi = [x for x in xi if abs(x[7] - x[6] ) > 48]	
-			Isnum = len(xi)	
-			sys.stderr.write(str('\n'.join([str(x) for x in xi]))+'\n')
-			sys.stderr.write(str('\n'.join([str(x[6:10]+[x[7] - x[6]]) for x in xi]))+'\n')
-			if Isnum >= (Iseqnem - 1):
+
+			#print("xi in Main="+str(xi))
+			xi = [x for x in xi if abs(x[7] - x[6] ) > minmatchlenI]	
+			Isnum = len(xi)
+			#sys.stderr.write("Isnum="+str(Isnum))	
+			#sys.stderr.write(str('\n'.join([str(x) for x in xi]))+'\n')
+			#sys.stderr.write(str('\n'.join([str(x[6:10]+[x[7] - x[6]]) for x in xi]))+'\n')
+			if Isnum >= (Iseqnem - 1) and len(xi) > 0:
 				#sys.stderr.write("$$$$$$$$$$$$$$$$$$$$SEP"+'\n') ##DEBUG
 				#for j in xi:sys.stderr.write(str(j)+'\n') ##DEBUG
 				align = getAlign3(DB,query,xi)
+				#sys.stderr.write("DB,query,xi="+ DB + query + str(xi))
+				#sys.stderr.write("align="+str(align))
 				Saln = MSAgen5(align,Ip)
 				if outname == "0":print Saln
 				else:fout.write(Saln)
@@ -894,6 +919,7 @@ opt.add_option("-m","--mode",help="bit selecting mode 0=only rnazWindow 1=least 
 opt.add_option("-n","--seqnum",help="minimum number of sequenceses in alignments ", dest="n", default='2')
 opt.add_option("-a","--align",help="select MSA program; default = 0 [MUSCLE]  1 = MAFFT local 2 = clustalw", dest="a", default='0')
 opt.add_option("-b","--ban",help="excluded sequence name in database to prevent selecting itself", dest="b", default='0')
+opt.add_option("--minmatchlen",help="Minimum match lenght", dest="minmatchlen", default='48')
 (options, args) = opt.parse_args()
 
 DB = options.r
@@ -907,6 +933,7 @@ Iseqnem = int(options.n)
 grouping = options.grouping
 ban = options.b
 ban = (ban.strip('"')).strip("'")
+minmatchlenI = int(options.minmatchlen)
 
 if None in (DB,query,blast):
 	opt.print_help()
