@@ -1,7 +1,9 @@
 #!/usr/bin/python
 ##augustus2TBL.py
 
-import sys,optparse
+import sys,optparse,copy
+def STDERR(StrInS):
+	sys.stderr.write(str(StrInS)+'\n')
 
 def chop(Gffs): #divide each prediction into a list of Features 
 	GffL = [[y.split("\t") for y in x.splitlines()] for x in Gffs.split("###\n")]	
@@ -23,12 +25,12 @@ def cut(GffL_elementL): ##separate each feature of each genes
 	return [MiscL,TasteL,EatL]
 
 def pick(CutL,SelectedTasteL):
-	ToShewL = []
+	ToChewL = []
 	for i in SelectedTasteL:
 		DeliciousPieceL = [x for x in CutL if x[0][2] == i] 
-		ToShewL.append(DeliciousPieceL)
+		ToChewL.append(DeliciousPieceL)
 
-	return ToShewL
+	return ToChewL
 
 
 class Fruit(object):	
@@ -45,15 +47,17 @@ class Fruit(object):
 
 		self.DishL = []
 		for TypeS in self.TypeL:
-			groupL = [x for x in self.PulpL if x[0][2] == TypeS]	
+			groupL = [x for x in self.PulpL if x[0][2] == TypeS]
+			groupL.append(TypeS)
+			#groupL = [[x[0],x[1][TypeS]] for x in groupL]				
 			self.DishL.append(groupL)
 
 class Piece(object):
 	def __init__(self,gffRow):
 		self.gffRowL = gffRow
-		self.pieceL = [self.gffRowL[0:8],self.shew(self.gffRowL)]
+		self.pieceL = [self.gffRowL[0:8],self.chew(self.gffRowL)]
 		
-	def shew(self,Pulp):		
+	def chew(self,Pulp):		
 		LastColumnL = [x.strip()+'"' for x in Pulp[8].split('";')]
 		if len(LastColumnL) > 1:
 			TEMPL = [x.split() for x in  LastColumnL if len(x.split()) > 1]
@@ -64,14 +68,230 @@ class Piece(object):
 		return tasteD
 
 
+def chew(DishL,SelectedTasteL):
+	OutS = ''
+	geneL = [x for x in DishL if x[-1] == 'gene'][0][0] ##select quallifier from gene record
+	STDERR("THIS IS geneL") ##DEBUG
+	STDERR(geneL) ##DEBUG
+	STDERR("geneL END") ##DEBUG
+	tagD = geneL[1] ##get dictionary from list
+	tagD.update([x for x in DishL if x[-1] == 'transcript'][0][0][1]) ##select quallifier from gene record
+
+	if geneL[0][6] == '-': ##Create gene position
+		OutS = geneL[0][4] + "\t" + geneL[0][3] + "\t" + "gene" + "\n" + "\t"*3 + "locus_tag\t" + tagD['gene_id'] + "\n" ##minus strand feature
+	elif geneL[0][6] == '+':
+		OutS = geneL[0][3] + "\t" + geneL[0][4] + "\t" + "gene" + "\n" + "\t"*3 + "locus_tag\t" + tagD['gene_id'] + "\n" ##plus  strand feature
+	
+	for i in SelectedTasteL[1:]:
+		PreCurrentL = [x[:-1] for x in DishL if x[-1] == i]
+		if len(PreCurrentL) > 0:
+			STDERR("THIS IS CurrentL") ##DEBUG
+			CurrentL = PreCurrentL[0]
+			STDERR(str(CurrentL)) ##DEBUG
+			STDERR("str(CurrentL[0][0])") ##DEBUG			
+			STDERR(str(CurrentL[0][0])) ##DEBUG			
+			if geneL[0][6] == '-': ##Create other attributes positions MINUS
+				STDERR("THIS IS CurrentL->"+str(CurrentL)+"<<<<<<<<<<<<<<<") ##DEBUG
+				PositionL = [x[0][4]+"\t"+x[0][3] for x in sorted(CurrentL, key = lambda x:(int(x[0][3])+int(x[0][4]))/2)[::-1]]
+				#PositionL = [x[0][4]+"\t"+x[0][3]+"MINUS" for x in CurrentL]
+			elif geneL[0][6] == '+': ##Create other attributes positions PLUS
+				STDERR("THIS IS CurrentL->"+str(CurrentL)+"<<<<<<<<<<<<<<<") ##DEBUG
+				PositionL = [x[0][3]+"\t"+x[0][4] for x in CurrentL]
+				
+			NextLinesS = PositionL[0] + "\t" + i + "\n"
+			for PositionS in PositionL[1:]:
+				NextLinesS = NextLinesS + PositionS + "\t" + "\n"
+			for att in ['product', 'gene_id', 'transcript_id']:
+				if i in ['gene', 'transcript', 'CDS']:
+					NextLinesS = NextLinesS + "\t"*3 + att + "\t" + tagD[att] + "\n"
+
+			OutS = OutS + NextLinesS 
+	return OutS
+
+def SmoothChew(DishL,SelectedTasteL):
+	SelectedTasteL = ['gene', 'transcript', 'CDS'] 
+	OutS = ''
+	geneL = [x for x in DishL if x[-1] == 'gene'][0][0] ##select quallifier from gene record
+	STDERR("THIS IS geneL") ##DEBUG
+	STDERR(geneL) ##DEBUG
+	STDERR("geneL END") ##DEBUG
+	tagD = geneL[1] ##get dictionary from list
+	tagD.update([x for x in DishL if x[-1] == 'transcript'][0][0][1]) ##select quallifier from gene record
+	##Partial feature Check
+	StartCodonS = "0"
+	StopCodonS = "0"
+	StartFlagI = 0 ##Flag for partial feature editing
+	StopFlagI = 0 ##Flag for partial feature editing
+	STDERR("THIS IS DishL"+str(DishL)) ##DEBUG
+	if geneL[0][6] == '+': #change last position of CDS to be stop codon
+		StartCodonL = [x[:-1] for x in DishL if x[-1] == 'start_codon']
+		if len(StartCodonL) > 0:
+			StartCodonS = StartCodonL[0][0][0][3]
+		else:
+			StartCodonL = [x[:-1] for x in DishL if x[-1] == 'gene']
+			StartCodonS = "<" + StartCodonL[0][0][0][3]
+			StartFlagI = 1
+
+		StopCodonL = [x[:-1] for x in DishL if x[-1] == 'stop_codon']
+		if len(StopCodonL) > 0:
+			StopCodonS = StopCodonL[0][0][0][4]
+		else:
+			StopCodonL = [x[:-1] for x in DishL if x[-1] == 'gene']
+			StopCodonS = ">" + StopCodonL[0][0][0][4]
+			StopFlagI = 1
+
+	elif geneL[0][6] == '-': #change last position of CDS to be stop codon
+		StartCodonL = [x[:-1] for x in DishL if x[-1] == 'start_codon']
+		if len(StartCodonL) > 0:
+			StartCodonS = StartCodonL[0][0][0][4]
+		else:
+			StartCodonL = [x[:-1] for x in DishL if x[-1] == 'gene']
+			StartCodonS = "<" + StartCodonL[0][0][0][4]
+			StartFlagI = 1
+
+		StopCodonL = [x[:-1] for x in DishL if x[-1] == 'stop_codon']
+		if len(StopCodonL) > 0:
+			StopCodonS = StopCodonL[0][0][0][3]
+		else:
+			StopCodonL = [x[:-1] for x in DishL if x[-1] == 'gene']
+			StopCodonS = ">" + StopCodonL[0][0][0][3]
+			StopFlagI = 1
+
+	STDERR("THIS IS START CODON"+str(StartCodonS)) ##DEBUG
+	STDERR("THIS IS STOP CODON"+str(StopCodonS)) ##DEBUG
+
+	if geneL[0][6] == '-': ##Create gene position
+		#OutS = geneL[0][4] + "\t" + geneL[0][3] + "\t" + "gene" + "\n" + "\t"*3 + "locus_tag\t" + tagD['gene_id'].replace('"','') + "\n" ##minus strand feature
+		OutS = StartCodonS + "\t" + StopCodonS + "\t" + "gene" + "\n" + "\t"*3 + "locus_tag\t" + tagD['gene_id'].replace('"','') + "\n" ##minus strand feature
+	elif geneL[0][6] == '+':
+		#OutS = geneL[0][3] + "\t" + geneL[0][4] + "\t" + "gene" + "\n" + "\t"*3 + "locus_tag\t" + tagD['gene_id'].replace('"','') + "\n" ##plus  strand feature
+		OutS = StartCodonS + "\t" + StopCodonS + "\t" + "gene" + "\n" + "\t"*3 + "locus_tag\t" + tagD['gene_id'].replace('"','') + "\n" ##plus  strand feature
+		
+	##define mRNA position
+
+	PreCurrentL = [x[:-1] for x in DishL if x[-1] == 'CDS']
+	if len(PreCurrentL) > 0:
+		CurrentL = PreCurrentL[0]
+		if geneL[0][6] == '-': ##Create other attributes positions MINUS
+			CurrentL2 = copy.deepcopy(sorted(CurrentL, key = lambda x:(int(x[0][3])+int(x[0][4]))/2)[::-1]) ##Create Minus Strand Feature
+			CurrentL2[0][0][4] =  StartCodonS
+			CurrentL2[-1][0][3] =  StopCodonS
+			PositionL = [x[0][4]+"\t"+x[0][3] for x in CurrentL2]
+
+		elif geneL[0][6] == '+': ##Create other attributes positions PLUS
+			CurrentL2 = copy.deepcopy(CurrentL)
+			CurrentL2[0][0][3] =  StartCodonS
+			CurrentL2[-1][0][4] =  StopCodonS
+
+			PositionL = [x[0][3]+"\t"+x[0][4] for x in CurrentL2]
+			
+		NextLinesS = PositionL[0] + "\t" + 'mRNA' + "\n"
+		for PositionS in PositionL[1:]:
+			NextLinesS = NextLinesS + PositionS + "\t" + "\n"
+		for att in ['product', 'gene_id', 'transcript_id']:
+			NextLinesS = NextLinesS + "\t"*3 + att + "\t" + tagD[att].replace('"','') + "\n"
+		
+		OutS = OutS + NextLinesS.replace('gene_id','protein_id') 	
+
+	##define CDS position
+	
+	PreCurrentL = [x[:-1] for x in DishL if x[-1] == 'CDS']
+	if len(PreCurrentL) > 0:
+		CurrentL = PreCurrentL[0]
+		if geneL[0][6] == '-': ##Create other attributes positions MINUS
+			PositionL = [x[0][4]+"\t"+x[0][3] for x in sorted(CurrentL, key = lambda x:(int(x[0][3])+int(x[0][4]))/2)[::-1]]
+			if StartFlagI == 1 and PositionL[0].split('\t')[0] == StartCodonS.replace("<",""):
+				PositionL[0] = "<" + PositionL[0] ##change to Partial feature
+			#OutS = OutS + str(StartFlagI) +" StartFlagI " + str(PositionL[0].split('\t')[0]) +" PositionL[0].split('\t')[0] " + StartCodonS.replace("<","") + ' StartCodonS.replace("<","")\n' ##DEBUG 
+			if StopFlagI == 1 and PositionL[-1].split('\t')[1] == StopCodonS.replace(">",""):
+				PositionL[0] = PositionL[-1].replace("\t","\t>") ##change to Partial feature
+
+
+		elif geneL[0][6] == '+': ##Create other attributes positions PLUS
+			PositionL = [x[0][3]+"\t"+x[0][4] for x in CurrentL]
+			if StartFlagI == 1 and PositionL[0].split('\t')[0] == StartCodonS.replace("<",""):
+				PositionL[0] = "<" + PositionL[0] ##change to Partial feature
+			if StopFlagI == 1 and PositionL[-1].split('\t')[1] == StopCodonS.replace(">",""):
+				PositionL[-1] = PositionL[-1].replace("\t","\t>") ##change to Partial feature
+			#OutS = OutS + str(StartFlagI) +" StartFlagI " + str(PositionL[-1].split('\t')[1]) +" PositionL[-1].split('\t')[1] " + StartCodonS.replace(">","") + ' StartCodonS.replace(">","")\n' ##DEBUG 
+		NextLinesS = PositionL[0] + "\t" + 'CDS' + "\n"
+		for PositionS in PositionL[1:]:
+			NextLinesS = NextLinesS + PositionS + "\t" + "\n"
+		for att in ['product', 'gene_id', 'transcript_id']:
+			NextLinesS = NextLinesS + "\t"*3 + att + "\t" + tagD[att].replace('"','') + "\n"
+		
+		OutS = OutS + NextLinesS.replace('gene_id','protein_id') 	
+
+	
+	##define intron position
+	PreCurrentL = [x[:-1] for x in DishL if x[-1] == 'intron']
+	if len(PreCurrentL) > 0:
+		CurrentL = PreCurrentL[0]
+		if geneL[0][6] == '-': ##Create other attributes positions MINUS
+			PositionL = [x[0][4]+"\t"+x[0][3] for x in sorted(CurrentL, key = lambda x:(int(x[0][3])+int(x[0][4]))/2)[::-1]]
+			if StartFlagI == 1 and PositionL[0].split('\t')[0] == StartCodonS.replace("<",""):
+				PositionL[0] = "<" + PositionL[0] ##change to Partial feature
+			#OutS = OutS + str(StartFlagI) +" StartFlagI " + str(PositionL[0].split('\t')[0]) +" PositionL[0].split('\t')[0] " + StartCodonS.replace("<","") + ' StartCodonS.replace("<","")\n' ##DEBUG 
+			if StopFlagI == 1 and PositionL[-1].split('\t')[1] == StopCodonS.replace(">",""):
+				PositionL[0] = PositionL[-1].replace("\t","\t>") ##change to Partial feature
+			
+		elif geneL[0][6] == '+': ##Create other attributes positions PLUS
+			PositionL = [x[0][3]+"\t"+x[0][4] for x in CurrentL]
+			if StartFlagI == 1 and PositionL[0].split('\t')[0] == StartCodonS.replace("<",""):
+				PositionL[0] = "<" + PositionL[0] ##change to Partial feature
+			if StopFlagI == 1 and PositionL[-1].split('\t')[1] == StopCodonS.replace(">",""):
+				PositionL[-1] = PositionL[-1].replace("\t","\t>") ##change to Partial feature
+			#OutS = OutS + str(StartFlagI) +" StartFlagI " + str(PositionL[-1].split('\t')[1]) +" PositionL[-1].split('\t')[1] " + StartCodonS.replace(">","") + ' StartCodonS.replace(">","")\n' ##DEBUG 
+
+		IntronNumberI = 1 ##intron number increment
+		NextLinesS = '' ## innitiate Next Line Text
+		for PositionS in PositionL:
+			NextLinesS = NextLinesS + PositionS + "\t" + 'intron' + "\n" + "\t"*3 + 'number' + "\t" + str(IntronNumberI) + "\n"
+			IntronNumberI += 1
+
+		OutS = OutS + NextLinesS 
+	return OutS
+
+def Main():
+	chopedL = chop(Gffs)[:] 
+	#for i in chopedL:##DEBUG
+	#	print len(i) ##DEBUG
+	chopedL = [x for x  in chopedL if len(x) > 3]
+	SelectedTasteL = ['gene', 'transcript', 'CDS', 'intron'] 
+	
+	ContigTagS = ''
+	OutStringS = ''
+	#print(len(chopedL[0]),len(chopedL[10]),len(chopedL[-1])) ##DEBUG
+	#print(str(chopedL[0]),"#####\n",str(chopedL[10]),"#########\n",str(chopedL[-1])) ##DEBUG
+	for pieceE in chopedL: 
+		FruitOBJ = Fruit(pieceE)
+
+		STDERR("FruitOBJ.DishL") ##DEBUG
+		STDERR(str(FruitOBJ.DishL).replace(", [[[","\n, [[[")) ##DEBUG
+		
+		#print(FruitOBJ.DishL[0][0][0][0]) ##DEBUG
+		if FruitOBJ.DishL[0][0][0][0] != ContigTagS:
+			ContigTagS = FruitOBJ.DishL[0][0][0][0]
+			OutStringS = OutStringS + ">Features " + ContigTagS  + "\n"
+		OutStringS = OutStringS + SmoothChew(FruitOBJ.DishL,SelectedTasteL)
+
+	print(OutStringS) ##DEBUG
+
+
 def TestMain():
 
 	chopedL = chop(Gffs)[:] 
 
-	SelectedTasteL = ['gene', 'transcript', 'intron', 'CDS'] 
+	SelectedTasteL = ['gene', 'transcript', 'intron', 'CDS','start_codon','stop_codon'] 
+	
 	ContigTagS = ''
 	for pieceE in chopedL: 
 		FruitOBJ = Fruit(pieceE)
+		#for i in FruitOBJ.CutL: ##DEBUG
+		#	print(str(i)) ##DEBUG
+		ToChew = pick(FruitOBJ.CutL[2],SelectedTasteL)
+		#print("###THIS#IS#TO#SHEW#")
+		#print(str(ToChew)) ##DEBUG
 		geneL = FirstRowL[0]
 		
 		if ContigTagS != geneL[0]:
@@ -102,5 +322,5 @@ def TestMain():
 		
 
 Gffs = sys.stdin.read()
-TestMain()
+Main()
 
