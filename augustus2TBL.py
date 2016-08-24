@@ -2,8 +2,9 @@
 ##augustus2TBL.py
 
 import sys,optparse,copy
-def STDERR(StrInS):
-	sys.stderr.write(str(StrInS)+'\n')
+def STDERR(*StrInS):
+	outS = ' '.join([str(x) for x in StrInS])
+	sys.stderr.write(str(outS)+'\n')
 
 def chop(Gffs): #divide each prediction into a list of Features 
 	GffL = [[y.split("\t") for y in x.splitlines()] for x in Gffs.split("###\n")]	
@@ -252,7 +253,7 @@ def SmoothChew(DishL,SelectedTasteL):
 		OutS = OutS + NextLinesS 
 	return OutS
 
-def Main():
+def Main(Gffs):
 	chopedL = chop(Gffs)[:] 
 	#for i in chopedL:##DEBUG
 	#	print len(i) ##DEBUG
@@ -261,8 +262,9 @@ def Main():
 	
 	ContigTagS = ''
 	OutStringS = ''
-	#print(len(chopedL[0]),len(chopedL[10]),len(chopedL[-1])) ##DEBUG
-	#print(str(chopedL[0]),"#####\n",str(chopedL[10]),"#########\n",str(chopedL[-1])) ##DEBUG
+	STDERR("THIS IS chopedL")
+	STDERR(len(chopedL[0]),len(chopedL[10]),len(chopedL[-1])) ##DEBUG
+	STDERR(str(chopedL[0]),"#####\n",str(chopedL[10]),"#########\n",str(chopedL[-1])) ##DEBUG
 	for pieceE in chopedL: 
 		FruitOBJ = Fruit(pieceE)
 
@@ -275,7 +277,7 @@ def Main():
 			OutStringS = OutStringS + ">Features " + ContigTagS  + "\n"
 		OutStringS = OutStringS + SmoothChew(FruitOBJ.DishL,SelectedTasteL)
 
-	print(OutStringS) ##DEBUG
+	return(OutStringS) ##DEBUG
 
 
 def TestMain():
@@ -321,6 +323,50 @@ def TestMain():
 		print(qualifierS)
 		
 
-Gffs = sys.stdin.read()
-Main()
+### Input and Option 
+usage = "augustus2TBL.py -i input.gff -o out_file"
+opt = optparse.OptionParser(usage)
+opt.add_option("-i",help="*input path, get input from stdin if ommit", default='0')
+opt.add_option("-o",help="indicate output file name or print out as standard output",default="0")
+opt.add_option("-x",help="*exclude gene_id file", default='0')
+opt.add_option("--id-fill",help="*exclude gene_id file", default='0')
+(options, args) = opt.parse_args()
+
+
+if options.i == '0': ##get input from pipe
+	Gffs = sys.stdin.read()
+else:#open file
+	f=open(options.i,'r')
+	Gffs = f.read()
+	f.close()
+
+ExcludeL = []
+if options.x != '0': ##get exclude list from pipe
+	f=open(options.x,'r')
+	ExcludeL = [x.strip() for x in f.readlines() if len(x) > 0]
+	f.close()
+	GffL = [x.strip() for x in Gffs.split("###\n") if x.find(' gene_id ') != -1]
+	STDERR(ExcludeL)
+	NewGffS = ''
+	for line in GffL:
+		#STDERR(line.split(';'),"***********") ##DEBUG
+		gene_idS = [xx for xx in list(set([x for x in line.split(';') if x.find(' gene_id ') == 0])) if len(xx) > 0][0].split()[-1].replace('"','')
+		STDERR(gene_idS) ##DEBUG
+		if gene_idS not in ExcludeL:
+			NewGffS = NewGffS + line + "###\n"
+	Gffs = NewGffS
+	
+
+if options.o == '0': ##print output to pipe
+	print(Main(Gffs))
+else:#write output to a flie
+	f=open(options.o,'w')
+	f.write(Main(Gffs))
+	f.close()
+
+
+
+
+
+
 
