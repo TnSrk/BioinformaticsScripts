@@ -32,21 +32,74 @@ class hit(object):
 		self.slenI = int(self.AttributesL[12])
 		self.qlenI = int(self.AttributesL[13])
 		self.qcovsF = float(self.AttributesL[14])
+def Pgroup(selectOJBL):
+	nameL = [] ##create empty list to contain contigs names
+	for OBJ in selectOJBL: 
+		if OBJ.qseqidS not in nameL:
+			nameL.append(OBJ.sseqidS)
+
+	groupedL = [] ##create empty list to contain grouped hit
+	while len(nameL) > 0:
+		currentNameS = nameL.pop(0)
+		#BestHitOBJ = sorted([x for x in selectOJBL if x.sseqidS == currentNameS], key=lambda LL:LL.bitscoreF)[::-1][0] ##select best hit for each 	
+		OtherHitL = [x for x in selectOJBL if x.sseqidS == currentNameS]
+		ExcNameL = [x.qseqidS for x in OtherHitL]
+		#nameL = [x for x in nameL if x not in ExcNameL]
+		STDERR("len(nameL)=",len(nameL))
+		groupedL.append(OtherHitL)
+
+	return groupedL
+
+def group(selectOJBL):
+	nameL = [] ##create empty list to contain contigs names
+	for OBJ in selectOJBL: 
+		if OBJ.qseqidS not in nameL:
+			nameL.append(OBJ.qseqidS)
+
+	groupedL = [] ##create empty list to contain grouped hit
+	while len(nameL) > 0:
+		currentNameS = nameL.pop(0)
+		BestHitOBJ = sorted([x for x in selectOJBL if x.qseqidS == currentNameS], key=lambda LL:LL.bitscoreF)[::-1][0] ##select best hit for each 	
+		OtherHitL = [x for x in selectOJBL if x.sseqidS == BestHitOBJ.sseqidS]
+		ExcNameL = [x.qseqidS for x in OtherHitL]
+		nameL = [x for x in nameL if x not in ExcNameL]
+		STDERR("len(nameL)=",len(nameL))
+		groupedL.append(OtherHitL)
+
+	return groupedL
+		
+	
 
 def main(INS):
 	INL = (chop(INS))
-	firsthitOBJ = hit(INL[0]) #DEBUG
-	STDERR(firsthitOBJ) ##DEBUG
-
+	hitOBJL = [hit(x) for x in INL]
+	selectOJBL = [x for x in hitOBJL if x.qcovsF > __QCovF__ and x.evalueF < __EvalF__]
+	#selectOJBL = selectOJBL[0:1000] ##DEBUG
+	
+	STDERR([x.AttributesL for x in selectOJBL[0:2]]) ##DEBUG
+	STDERR("entering group function") ##DEBUG
+	outS = ''
+	#for OBJL in group(selectOJBL):
+	for OBJL in Pgroup(selectOJBL):
+		sortedOBJL = sorted([x.AttributesL for x in OBJL], key=lambda x:(int(x[8]) + int(x[9]))/2 )
+		#outS = outS + '\n'.join(['\t'.join(x.AttributesL) for x in sortedOBJL]) + "\n############\n"
+		outS = outS + '\n'.join(['\t'.join(x) for x in sortedOBJL]) + "\n############\n"
+	#STDERR(group(selectOJBL)[0])
+	return outS
 
 ### Input and Option 
 usage = "python TXblastX.py.py -i input.gff -o out_file"
 opt = optparse.OptionParser(usage)
 opt.add_option("-i",help="*input path, get input from stdin if ommit", default='0')
 opt.add_option("-o",help="indicate output file name or print out as standard output",default="0")
+opt.add_option("-e",help="E-value cutoff for selected hit",default="0.1")
+opt.add_option("-c",help="query-length covery rate cutoff for selected hit",default="0.98")
 (options, args) = opt.parse_args()
 
 ##Documentation part
+__QCovF__ = float(options.c)*100.0 ;STDERR("__QCovF__ = ",__QCovF__)
+__EvalF__ = float(options.e)	;STDERR("__EvalF__ = ",__EvalF__)
+
 if options.i == '0': ##get input from pipe
 	INS = sys.stdin.read()
 
@@ -54,4 +107,12 @@ else:#open file
 	f=open(options.i,'r')
 	INS = f.read()
 	f.close()
+if options.o == '0': ##print output to pipe
+	print(main(INS))
+else:#write output to a flie
+	f=open(options.o,'w')
+	f.write(Main(INS))
+	f.close()	
+
+
 
