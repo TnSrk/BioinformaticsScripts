@@ -110,7 +110,7 @@ def GroupScore(Eachgrouped1L):
 
 	SLenI = OBJLsortedL[0].slenI
 
-	CovNumI = abs(TailI - HeadI)
+	CovNumI = 0
 	CurrentTailI = 0
 	for i in OBJLsortedL[1:]:
 		if i.sstartI < i.sendI:
