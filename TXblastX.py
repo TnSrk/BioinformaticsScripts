@@ -2,14 +2,17 @@
 ##TXblastX.py.py
 ##Takes input from blastx with -outfmt '6 qseqid sseqid pident length mismatch gapopen qstart qend sstart send evalue bitscore slen qlen qcovs' option
 
-import sys,optparse
+import sys,optparse, copy
 ### Class And Function
 def STDERR(*StrInS): #Function For Debugging
 	outS = ' '.join([str(x) for x in StrInS])
 	sys.stderr.write(str(outS)+'\n')
 
 def chop(blastxS): #divide each hit into a list of attributes 
-	blastxL = [y for y in blastxS.splitlines()]	
+	if __TAG__ != '0':
+		blastxL = [y for y in blastxS.splitlines() if y.find(__TAG__) != -1]
+	else:
+		blastxL = [y for y in blastxS.splitlines()]		
 	return blastxL
 
 class hit(object):
@@ -35,7 +38,7 @@ class hit(object):
 def Pgroup(selectOJBL):
 	nameL = [] ##create empty list to contain contigs names
 	for OBJ in selectOJBL: 
-		if OBJ.qseqidS not in nameL:
+		if OBJ.sseqidS not in nameL:
 			nameL.append(OBJ.sseqidS)
 
 	groupedL = [] ##create empty list to contain grouped hit
@@ -49,6 +52,87 @@ def Pgroup(selectOJBL):
 		groupedL.append(OtherHitL)
 
 	return groupedL
+
+def merge4(Ori_inputlistOBJ,coverage):
+	inputlistOBJ = copy.deepcopy(Ori_inputlistOBJ)
+	a = sorted(inputlistOBJ, key = lambda x:abs(x.sstartI - x.sendI) )[::-1]
+	clustL = []
+
+	while len(a) > 0:
+	
+		mark = a.pop(0)
+		#clustL.append([])
+
+		Mhead = mark.sstartI
+		Mtail = mark.sendI
+		Mlength = abs(mark.sendI - mark.sstartI)
+		
+		## <------------------->
+		##    <------------->
+		temp = [x for x in a if x.sstartI >= Mhead and x.sendI <= Mtail] #and abs(x.sendI - x.sstartI) > (coverage* Mlength)]
+
+		##    <------------------->
+		## <------------------>
+		temp2 = [x for x in a if x.sendI < Mtail and Mlength >= abs(x.sendI - x.sstartI) >= (coverage* Mlength) and (Mhead - x.sstartI) <= coverage*(abs(x.sendI - x.sstartI))] 
+		temp2 = [x for x in temp2 if x not in temp]
+
+		temp = temp + temp2
+		
+		## <------------------->
+		##     <------------------>		
+		temp2 = [x for x in a if x.sstartI > Mhead and Mlength >= abs(x.sendI - x.sstartI) >= (coverage* Mlength) and (x.sendI - Mtail) <= coverage*(abs(x.sendI - x.sstartI))]
+		temp2 = [x for x in temp2 if x not in temp]
+
+		temp = temp + temp2
+		temp = sorted(temp, key=lambda temp:temp.sstartI)
+		
+		a = [x for x in a if x not in temp]
+		
+		pick = [x for x in temp]
+		pick.insert(0,mark) 
+		clustL.append(pick)
+	return clustL
+
+def GroupScore(Eachgrouped1L):
+	groupedL =  merge4(Eachgrouped1L,0.75)
+	EachgroupedL = []
+	for L in groupedL:
+		CurrentL = sorted(L, key=lambda x:x.bitscoreF)[-1]
+		EachgroupedL.append(CurrentL)
+	
+	OBJLsortedL = sorted(EachgroupedL, key=lambda x:x.sstartI )
+	if OBJLsortedL[0].sstartI < OBJLsortedL[0].sendI:
+		HeadI = OBJLsortedL[0].sstartI
+		TailI = OBJLsortedL[0].sendI
+	elif OBJLsortedL[0].sstartI > OBJLsortedL[0].sendI:
+		HeadI = OBJLsortedL[0].sendI
+		TailI = OBJLsortedL[0].sstartI
+
+	SLenI = OBJLsortedL[0].slenI
+
+	CovNumI = abs(TailI - HeadI)
+	CurrentTailI = 0
+	for i in OBJLsortedL[1:]:
+		if i.sstartI < i.sendI:
+			CurrentHeadI = i.sstartI
+			CurrentTailI = i.sendI
+		elif i.sstartI > i.sendI:
+			CurrentHeadI = i.sendI
+			CurrentTailI = i.sstartI
+
+		if CurrentHeadI > TailI:
+			CovNumI = CovNumI + abs(TailI - HeadI)
+			HeadI = CurrentHeadI
+			TailI = CurrentTailI
+		else:
+			
+			TailI = CurrentTailI
+	
+	if TailI == CurrentTailI:
+		CovNumI = CovNumI + abs(TailI - HeadI)
+
+	return [[x.AttributesL for x in EachgroupedL],float(CovNumI)/float(SLenI)]
+	
 
 def group(selectOJBL):
 	nameL = [] ##create empty list to contain contigs names
@@ -73,6 +157,8 @@ def group(selectOJBL):
 def main(INS):
 	INL = (chop(INS))
 	hitOBJL = [hit(x) for x in INL]
+	if __TAG__ != '0':
+		selectOJBL = [x for x in hitOBJL if x.qcovsF > __QCovF__ and x.evalueF < __EvalF__]
 	selectOJBL = [x for x in hitOBJL if x.qcovsF > __QCovF__ and x.evalueF < __EvalF__]
 	#selectOJBL = selectOJBL[0:1000] ##DEBUG
 	
@@ -81,9 +167,12 @@ def main(INS):
 	outS = ''
 	#for OBJL in group(selectOJBL):
 	for OBJL in Pgroup(selectOJBL):
+		ScoreFL = GroupScore(OBJL)
 		sortedOBJL = sorted([x.AttributesL for x in OBJL], key=lambda x:(int(x[8]) + int(x[9]))/2 )
 		#outS = outS + '\n'.join(['\t'.join(x.AttributesL) for x in sortedOBJL]) + "\n############\n"
-		outS = outS + '\n'.join(['\t'.join(x) for x in sortedOBJL]) + "\n############\n"
+		#outS = outS + '\n'.join(['\t'.join(x) for x in sortedOBJL]) + "\nPoolCovScpre=" + str(ScoreFL[1]) + "\nEachgroupedL=" + str(ScoreFL[0]) + "\n############\n"
+		outS = outS + '\n'.join(['\t'.join(x) for x in sortedOBJL]) + "\nPoolCovScpre=\t" + str(ScoreFL[1]) +"\t"+ ScoreFL[0][0][1] + "\n############\n"		
+		outS = outS + str(ScoreFL[0]).replace("""],""","""]\n""") + "\n############\n"
 	#STDERR(group(selectOJBL)[0])
 	return outS
 
@@ -94,11 +183,13 @@ opt.add_option("-i",help="*input path, get input from stdin if ommit", default='
 opt.add_option("-o",help="indicate output file name or print out as standard output",default="0")
 opt.add_option("-e",help="E-value cutoff for selected hit",default="0.1")
 opt.add_option("-c",help="query-length covery rate cutoff for selected hit",default="0.98")
+opt.add_option("--TAG",help="Spicies Tag in protein name",default="0",dest="TAG")
 (options, args) = opt.parse_args()
 
 ##Documentation part
 __QCovF__ = float(options.c)*100.0 ;STDERR("__QCovF__ = ",__QCovF__)
 __EvalF__ = float(options.e)	;STDERR("__EvalF__ = ",__EvalF__)
+__TAG__ = options.TAG
 
 if options.i == '0': ##get input from pipe
 	INS = sys.stdin.read()
