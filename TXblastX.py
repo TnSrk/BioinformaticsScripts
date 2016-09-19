@@ -35,6 +35,7 @@ class hit(object):
 		self.slenI = int(self.AttributesL[12])
 		self.qlenI = int(self.AttributesL[13])
 		self.qcovsF = float(self.AttributesL[14])
+
 def Pgroup(selectOJBL):
 	nameL = [] ##create empty list to contain contigs names
 	for OBJ in selectOJBL: 
@@ -69,18 +70,18 @@ def merge4(Ori_inputlistOBJ,coverage):
 		
 		## <------------------->
 		##    <------------->
-		temp = [x for x in a if x.sstartI >= Mhead and x.sendI <= Mtail] #and abs(x.sendI - x.sstartI) > (coverage* Mlength)]
+		temp = [x for x in a if min(x.sstartI,x.sendI) >= Mhead and max(x.sendI, x.sstartI) <= Mtail] #and abs(x.sendI - x.sstartI) > (coverage* Mlength)]
 
 		##    <------------------->
 		## <------------------>
-		temp2 = [x for x in a if x.sendI < Mtail and Mlength >= abs(x.sendI - x.sstartI) >= (coverage* Mlength) and (Mhead - x.sstartI) <= coverage*(abs(x.sendI - x.sstartI))] 
+		temp2 = [x for x in a if max(x.sendI, x.sstartI) < Mtail and Mlength >= abs(x.sendI - x.sstartI) >= (coverage* Mlength) and (Mhead - min(x.sstartI,x.sendI)) <= coverage*(abs(x.sendI - x.sstartI))] 
 		temp2 = [x for x in temp2 if x not in temp]
 
 		temp = temp + temp2
 		
 		## <------------------->
 		##     <------------------>		
-		temp2 = [x for x in a if x.sstartI > Mhead and Mlength >= abs(x.sendI - x.sstartI) >= (coverage* Mlength) and (x.sendI - Mtail) <= coverage*(abs(x.sendI - x.sstartI))]
+		temp2 = [x for x in a if min(x.sendI, x.sstartI) > Mhead and Mlength >= abs(x.sendI - x.sstartI) >= (coverage* Mlength) and (max(x.sendI, x.sstartI) - Mtail) <= coverage*(abs(x.sendI - x.sstartI))]
 		temp2 = [x for x in temp2 if x not in temp]
 
 		temp = temp + temp2
@@ -101,18 +102,19 @@ def GroupScore(Eachgrouped1L):
 		EachgroupedL.append(CurrentL)
 	
 	OBJLsortedL = sorted(EachgroupedL, key=lambda x:x.sstartI )
-	if OBJLsortedL[0].sstartI < OBJLsortedL[0].sendI:
-		HeadI = OBJLsortedL[0].sstartI
-		TailI = OBJLsortedL[0].sendI
-	elif OBJLsortedL[0].sstartI > OBJLsortedL[0].sendI:
-		HeadI = OBJLsortedL[0].sendI
-		TailI = OBJLsortedL[0].sstartI
-
+	#if OBJLsortedL[0].sstartI < OBJLsortedL[0].sendI:
+	#	HeadI = OBJLsortedL[0].sstartI
+	#	TailI = OBJLsortedL[0].sendI
+	#elif OBJLsortedL[0].sstartI > OBJLsortedL[0].sendI:
+	#	HeadI = OBJLsortedL[0].sendI
+	#	TailI = OBJLsortedL[0].sstartI
+	HeadI = 0
+	TailI = 0
 	SLenI = OBJLsortedL[0].slenI
 
 	CovNumI = 0
 	CurrentTailI = 0
-	for i in OBJLsortedL[1:]:
+	for i in OBJLsortedL[:]:
 		if i.sstartI < i.sendI:
 			CurrentHeadI = i.sstartI
 			CurrentTailI = i.sendI
