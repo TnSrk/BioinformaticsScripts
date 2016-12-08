@@ -693,26 +693,29 @@ def MSAgen5(alignS,Ip):
 	alignout = x[0]
 	#print("arg="+arg) ##DEBUG
 	#print("alignout="+alignout) ##DEBUG
+	
 	if Ip == '0':
 		name = "S1S"
 		alignout = AlignReOrder(alignout,name)
 		alignout = alignout + '\n\n'
 
 	if Ip == '0' or Ip == '1' or Ip == '2':
-		
+		Dn2 = {}
 		for keys in Dn.keys():
-			Dn[keys] = Dn[keys].split(' ')[0][:]
+			Dn2[keys] = Dn[keys].split(' ')[0][:]
 
-		Ilngth = max([len(x) for x in Dn.values()])
+		Ilngth = max([len(x) for x in Dn2.values()])
 #		print Ilngth  ##DEBUG
-		Klngth = max([len(x) for x in Dn.keys()])
+		Klngth = max([len(x) for x in Dn2.keys()])
+		Jlngth = min([len(x) for x in Dn2.keys()])
 #		print Klngth  ##DEBUG
 		
-		for n in Dn: ##to short name in alignment
-			label = Ilngth - len(Dn[n])
-			label = Dn[n]+' '*label
+		for n in Dn2: ##to short name in alignment
+			label = Ilngth - len(Dn2[n]) + len(n)
+			#label = Ilngth  - abs(len(Dn[n])  - Jlngth) #fix space filling step
+			label = Dn2[n]+' '*label
 			alignout = alignout.replace(n,label)
-		Saster = '\n '+(' '*(Ilngth - Klngth))
+		Saster = '\n '+(' '*(Ilngth - Klngth + Jlngth))
 		alignout = alignout.replace('\n ',Saster)
 		#alignout = Salignout.replace('#',' ')
 		
