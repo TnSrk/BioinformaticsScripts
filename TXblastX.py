@@ -88,11 +88,11 @@ def merge4(Ori_inputlistOBJ,coverage):
 		temp = sorted(temp, key=lambda temp:temp.sstartI)
 		
 		a = [x for x in a if x not in temp]
-		
 		pick = [x for x in temp]
 		pick.insert(0,mark) 
-		clustL.append(pick)
+		clustL.append(pick) 
 	return clustL
+
 
 def GroupScore(Eachgrouped1L):
 	groupedL =  merge4(Eachgrouped1L,0.75)
@@ -154,14 +154,23 @@ def group(selectOJBL):
 
 	return groupedL
 		
-	
+def TruncateCheck(AblastResultOBJ): ##filter_out blast hit, math by sub-sequence at middle of query.
+	x = AblastResultOBJ	
+	#if x.qstartI > min(x.qlenI*0.1, 10) and  x.qendI < max(x.qlenI*0.9, (x.qlenI - 10)): ##Truncate hit condidion
+	if min(x.qstartI, x.qendI) > 10 and  max(x.qstartI, x.qendI) < (x.qlenI - 10): ##Truncate hit condidion
+		FlagI = 0
+	else:
+		FlagI = 1
+	return FlagI
 
 def main(INS):
 	INL = (chop(INS))
 	hitOBJL = [hit(x) for x in INL]
+	hitOBJL = [x for x in hitOBJL if TruncateCheck(x) == 1]
 	if __TAG__ != '0':
 		selectOJBL = [x for x in hitOBJL if x.qcovsF > __QCovF__ and x.evalueF < __EvalF__]
 	selectOJBL = [x for x in hitOBJL if x.qcovsF > __QCovF__ and x.evalueF < __EvalF__]
+	
 	#selectOJBL = selectOJBL[0:1000] ##DEBUG
 	
 	STDERR([x.AttributesL for x in selectOJBL[0:2]]) ##DEBUG
@@ -173,7 +182,8 @@ def main(INS):
 		sortedOBJL = sorted([x.AttributesL for x in OBJL], key=lambda x:(int(x[8]) + int(x[9]))/2 )
 		#outS = outS + '\n'.join(['\t'.join(x.AttributesL) for x in sortedOBJL]) + "\n############\n"
 		#outS = outS + '\n'.join(['\t'.join(x) for x in sortedOBJL]) + "\nPoolCovScpre=" + str(ScoreFL[1]) + "\nEachgroupedL=" + str(ScoreFL[0]) + "\n############\n"
-		outS = outS + '\n'.join(['\t'.join(x) for x in sortedOBJL]) + "\nPoolCovScpre=\t" + str(ScoreFL[1]) +"\t"+ ScoreFL[0][0][1] + "\n############\n"		
+		TXnumS = str(len(ScoreFL[0]))
+		outS = outS + '\n'.join(['\t'.join(x) for x in sortedOBJL]) + "\nPoolCovScpre=\t" + str(ScoreFL[1]) +"\t"+ ScoreFL[0][0][1] + "\tTXnumS=\t"+TXnumS +  "\n############\n"		
 		outS = outS + str(ScoreFL[0]).replace("""],""","""]\n""") + "\n############\n"
 	#STDERR(group(selectOJBL)[0])
 	return outS
