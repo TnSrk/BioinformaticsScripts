@@ -185,7 +185,7 @@ class FastaTool(object): ## class for manipulate sequences in fasta format
 def musclecall(SeqS):
 	#SeqS = self.SeqS
 	#arg = "muscle -maxiters 32 -gapopen -1200 -quiet"
-	arg = "muscle -maxiters 32 -quiet -clw"
+	arg = "muscle -maxiters 32 -quiet"
 	process = subprocess.Popen(arg, shell=True, stdin=subprocess.PIPE,stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 	x = process.communicate(SeqS)[0]
 	if len(x) == 0:
@@ -268,7 +268,8 @@ def main(INS): ##Take input as blast(n,x) result string
 		ToAlignSeqSS = PreAlign(i)
 		FastaAlignmentS = musclecall(ToAlignSeqSS)
 		#STDERR("FastaAlignmentS=",FastaAlignmentS)
-		print FastaAlignmentS
+		consensusS = consensusExtractKW(FastaAlignmentS,0,0.01)
+		print consensusS
 		
 
 
