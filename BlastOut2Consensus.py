@@ -47,31 +47,32 @@ def merge4(Ori_inputlistOBJ,coverage):
 		mark = a.pop(0)
 		#clustL.append([])
 
-		Mhead = mark.sstartI
-		Mtail = mark.sendI
-		Mlength = abs(mark.sendI - mark.sstartI)
+		Mhead = min(mark.qstartI,mark.qendI)
+		Mtail = max(mark.qstartI,mark.qendI)
+		Mlength = abs(mark.qendI - mark.qstartI)
 		
 		## <------------------->
 		##    <------------->
-		temp = [x for x in a if min(x.sstartI,x.sendI) >= Mhead and max(x.sendI, x.sstartI) <= Mtail] #and abs(x.sendI - x.sstartI) > (coverage* Mlength)]
+		temp = [x for x in a if min(x.qstartI,x.qendI) >= Mhead and max(x.qendI, x.qstartI) <= Mtail] #and abs(x.sendI - x.sstartI) > (coverage* Mlength)]
 
 		##    <------------------->
 		## <------------------>
-		temp2 = [x for x in a if max(x.sendI, x.sstartI) < Mtail and Mlength >= abs(x.sendI - x.sstartI) >= (coverage* Mlength) and (Mhead - min(x.sstartI,x.sendI)) <= coverage*(abs(x.sendI - x.sstartI))] 
+		temp2 = [x for x in a if max(x.qendI, x.qstartI) <= Mtail and max(x.qendI, x.qstartI) >= Mhead] #and (Mhead - min(x.sstartI,x.sendI)) <= coverage*(abs(x.sendI - x.sstartI))] 
 		temp2 = [x for x in temp2 if x not in temp]
 
 		temp = temp + temp2
 		
 		## <------------------->
 		##     <------------------>		
-		temp2 = [x for x in a if min(x.sendI, x.sstartI) > Mhead and Mlength >= abs(x.sendI - x.sstartI) >= (coverage* Mlength) and (max(x.sendI, x.sstartI) - Mtail) <= coverage*(abs(x.sendI - x.sstartI))]
+		temp2 = [x for x in a if min(x.qendI, x.qstartI) >= Mhead and min(x.qendI, x.qstartI) >= Mtail ] #and (max(x.sendI, x.sstartI) - Mtail) <= coverage*(abs(x.sendI - x.sstartI))]
 		temp2 = [x for x in temp2 if x not in temp]
 
 		temp = temp + temp2
-		temp = sorted(temp, key=lambda temp:temp.sstartI)
+		temp = sorted(temp, key=lambda temp:temp.qstartI)
 		
 		a = [x for x in a if x not in temp]
 		pick = [x for x in temp]
+		#mark.AttributesL[0] = "*"+mark.qseqidS
 		pick.insert(0,mark) 
 		clustL.append(pick) 
 	del(inputlistOBJ)
@@ -99,10 +100,24 @@ def getSseq4(DBname,Scontigname,Shead,Stail):
 	del process
 	return	TEMPseqs
 
+def getSeqFull(DBname,Scontigname):
+#	print DBname,Scontigname,Shead,Stail ##DEBUG
+	#arg1 = "fastacmd -p F -d "+DBname+" -s \""+Scontigname+"\" -L "+str(Shead)+","+str(Stail)+" ;"
+	arg = "blastdbcmd -db "+DBname+" -entry \""+Scontigname+"\";"
+		
+	process = subprocess.Popen(arg, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+	x = process.communicate()
+	
+	TEMPseqs = x[0].strip()
+	#STDERR("str(x[1])=",str(x[1])) ##DEBUG
+	del process
+	return	TEMPseqs
+
 class FastaTool(object): ## class for manipulate sequences in fasta format
 	def __init__(self,FastaInS):
 		self.FastaInS = FastaInS
 		self.seqLenI = self.seqlen()
+		self.FastaSrev  = self.header() +"Rev\n" + self.reversecomplement()
 
 	def seqonly(self):
 		fastaL = self.FastaInS.splitlines()
@@ -113,7 +128,6 @@ class FastaTool(object): ## class for manipulate sequences in fasta format
 		return self.fastaS
 	def FullSeqS(self):
 		return self.FastaInS
-	
 
 	def SubSeqS(self,StartI,EndI):
 		
@@ -168,13 +182,94 @@ class FastaTool(object): ## class for manipulate sequences in fasta format
 		self.seqLenI = len(self.seqonly())
 		return self.seqLenI
 
+def musclecall(SeqS):
+	#SeqS = self.SeqS
+	#arg = "muscle -maxiters 32 -gapopen -1200 -quiet"
+	arg = "muscle -maxiters 32 -quiet -clw"
+	process = subprocess.Popen(arg, shell=True, stdin=subprocess.PIPE,stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+	x = process.communicate(SeqS)[0]
+	if len(x) == 0:
+		x = '0'
+	return x
+
+def consensusExtractKW(MSAfasta,GapWeightF,MinPF): ##MinPF = minimum percent for consensus
+
+	SeqsL = MSAfasta.split('>') ## Take input aligment as fasta format
+	SeqsL = ['>' + x for x in SeqsL if len(x) > 0] ##Eliminate empty items
+	SeqsL = [FastaTool(x) for x in SeqsL] ## Create fasta object for each sequences
+	SeqsL = [x.seqonly().upper() for x in SeqsL] ## extract sequences from each fasta
+	SeqsL = [x for x in SeqsL if len(x) > 0]  ##Eliminate empty items
+
+	Cons = '' ##creat variable for consensus string storing 
+	AnumI = 0;TnumI = 0;GnumI=0;CnumI=0;GapNum=0 ##innitiate gap count variables
+	GapS = '-' ## define gap character 
+	columndepthF = float(len(SeqsL)) ## Define column depth for voting 
+
+	#EndGapI = 10 ##to modify (lower) gap score at the end of MSA
+	#SwitchFlag = 0
+	for i in range(len(SeqsL[0])): ## loop over coluns of alignment
+		anMSAcolumnL = [x[i] for x in SeqsL] ## extract each base from each sequences in column i_th
+		NucD = {} ## create dictionary for keep bases occurence
+		NucD['A'] = float(anMSAcolumnL.count('A')/columndepthF) ## calculate base "A" ratio
+		NucD['T'] = float(anMSAcolumnL.count('T')/columndepthF) ## calculate base "T" ratio
+		NucD['G'] = float(anMSAcolumnL.count('G')/columndepthF) ## calculate base "G" ratio
+		NucD['C'] = float(anMSAcolumnL.count('C')/columndepthF) ## calculate base "C" ratio
+		NucD[GapS] = float((anMSAcolumnL.count(GapS)/columndepthF)*GapWeightF) ## calculate gap ratio
+
+		VotesNumF = max(NucD.values()) ## select max occurences
+		VotesL = [x for x in NucD if NucD[x] == VotesNumF] ## find out which base is the most popular
+		VotesL = [x for x in NucD if NucD[x] == VotesNumF and NucD[x] >= MinPF]  ##  if the base is not popular enought then vote to N
+		if len(VotesL) == 0: ## If there is not a popular one then vtoe to N for the column
+			VotesL = ['N']
+
+		if len(VotesL) == 1: ## If there is only one popular base in a list then vtoe to that base for the column
+			Cons = Cons + VotesL[0]
+
+		elif len(VotesL) == 2 and GapS in VotesL:  ## If there are one popular base and gap in a list then select that base
+			VotesL = [x for x in VotesL if x != GapS]
+			Cons = Cons + VotesL[0]
+		elif len(VotesL) > 1 and  GapS not in VotesL: ## If more than one popular base then define that base in the column as N 
+			Cons = Cons + 'N'
+
+	Consout = Cons.strip().strip('N') ## delete N characters at both ends
+
+	return Consout
+
+def HitJoin(seedOBJ,neighborL): ## join blast hit if they are overlap with each other 
+	if seedOBJ.sstartI < seedOBJ.sendI or seedOBJ.qstartI < seedOBJ.qendI:
+		direction = 0 ## 5' --> 3'
+	else:
+		direction = 1 ## 3' --> 5'
+	if direction == 1:
+		headJoinL = [x for x in neighborL if x.sstartI > seedOBJ.sstartI and x.sstartI < seedOBJ.sstartI  ]
+	return None
+
+def PreAlign(SubClusterL):
+	PlusToAlignSeqSL = [getSeqFull(DBname,x.sseqidS) for x in SubClusterL if x.qstartI < x.qendI and x.sstartI < x.sendI ]
+	#STDERR("PlusToAlignSeqSL=",PlusToAlignSeqSL) ##DEBUG
+	PreMinusToAlignSeqSL = [getSeqFull(DBname,x.sseqidS) for x in SubClusterL if x.qstartI > x.qendI or x.sstartI > x.sendI ]
+	#STDERR("PreMinusToAlignSeqSL=",PreMinusToAlignSeqSL) ##DEBUG
+	OBJMinusToAlignSeqSL = [FastaTool(x) for x in PreMinusToAlignSeqSL]
+	MinusToAlignSeqSL = [x.FastaSrev for x in OBJMinusToAlignSeqSL]
+	del(OBJMinusToAlignSeqSL); del(PreMinusToAlignSeqSL); 
+	ToAlignSeqSL = MinusToAlignSeqSL + PlusToAlignSeqSL
+	ToAlignSeqSS = '\n'.join(ToAlignSeqSL)
+	return ToAlignSeqSS
+	
 
 def main(INS): ##Take input as blast(n,x) result string
 	cookedBlastL = [hit(x) for x in chop(INS)] #transform blast result into list of blast hit object
-	ClusteredL = merge4(cookedBlastL,0.1)
+	ClusteredL = merge4(cookedBlastL,0.05)
+	STDERR("len(ClusteredL)=",len(ClusteredL))##DEBUG
 	for i in ClusteredL: 
 		STDERR('\n'.join([str(x.AttributesL) for x in i])) ##DEBUG
 		STDERR("Each iter in ClusteredL ++++++++++++++++++++") ##DEBUG
+		#STDERR("ToAlignSeqSL\n",ToAlignSeqSS)
+		ToAlignSeqSS = PreAlign(i)
+		FastaAlignmentS = musclecall(ToAlignSeqSS)
+		#STDERR("FastaAlignmentS=",FastaAlignmentS)
+		print FastaAlignmentS
+		
 
 
 ### Input and Option 
@@ -203,11 +298,12 @@ else:#open file
 	INS = f.read()
 	f.close()
 if options.o == '0': ##print output to pipe
-	print(main(INS))
+	main(INS)
+	#print(main(INS))
 else:#write output to a flie
 	f=open(options.o,'w')
 	f.write(Main(INS))
 	f.close()	
 
-main(INS)
+
 

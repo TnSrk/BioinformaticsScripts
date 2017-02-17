@@ -10,9 +10,9 @@ def STDERR(*StrInS): #Function For Debugging
 
 def chop(blastxS): #divide each hit into a list of attributes 
 	if __TAG__ != '0':
-		blastxL = [y for y in blastxS.splitlines() if y.find(__TAG__) != -1]
+		blastxL = [y for y in blastxS.splitlines() if y.find(__TAG__) != -1 and len(y) > 2]
 	else:
-		blastxL = [y for y in blastxS.splitlines()]		
+		blastxL = [y for y in blastxS.splitlines() if len(y) > 2]		
 	return blastxL
 
 class hit(object):
@@ -91,6 +91,8 @@ def merge4(Ori_inputlistOBJ,coverage):
 		pick = [x for x in temp]
 		pick.insert(0,mark) 
 		clustL.append(pick) 
+	del(inputlistOBJ)
+	del(a)
 	return clustL
 
 
@@ -154,10 +156,10 @@ def group(selectOJBL):
 
 	return groupedL
 		
-def TruncateCheck(AblastResultOBJ): ##filter_out blast hit, math by sub-sequence at middle of query.
+def TruncateCheck(AblastResultOBJ,EndNumI): ##filter_out blast hit, math by sub-sequence at middle of query.
 	x = AblastResultOBJ	
 	#if x.qstartI > min(x.qlenI*0.1, 10) and  x.qendI < max(x.qlenI*0.9, (x.qlenI - 10)): ##Truncate hit condidion
-	if min(x.qstartI, x.qendI) > 10 and  max(x.qstartI, x.qendI) < (x.qlenI - 10): ##Truncate hit condidion
+	if min(x.qstartI, x.qendI) > EndNumI and  max(x.qstartI, x.qendI) < (x.qlenI - EndNumI): ##Truncate hit condidion
 		FlagI = 0
 	else:
 		FlagI = 1
@@ -166,7 +168,7 @@ def TruncateCheck(AblastResultOBJ): ##filter_out blast hit, math by sub-sequence
 def main(INS):
 	INL = (chop(INS))
 	hitOBJL = [hit(x) for x in INL]
-	hitOBJL = [x for x in hitOBJL if TruncateCheck(x) == 1]
+	#hitOBJL = [x for x in hitOBJL if TruncateCheck(x,10) == 1] ##remove truncated hit before processing
 	if __TAG__ != '0':
 		selectOJBL = [x for x in hitOBJL if x.qcovsF > __QCovF__ and x.evalueF < __EvalF__]
 	selectOJBL = [x for x in hitOBJL if x.qcovsF > __QCovF__ and x.evalueF < __EvalF__]
@@ -182,6 +184,26 @@ def main(INS):
 		sortedOBJL = sorted([x.AttributesL for x in OBJL], key=lambda x:(int(x[8]) + int(x[9]))/2 )
 		#outS = outS + '\n'.join(['\t'.join(x.AttributesL) for x in sortedOBJL]) + "\n############\n"
 		#outS = outS + '\n'.join(['\t'.join(x) for x in sortedOBJL]) + "\nPoolCovScpre=" + str(ScoreFL[1]) + "\nEachgroupedL=" + str(ScoreFL[0]) + "\n############\n"
+		TXnumS = str(len(ScoreFL[0]))
+		outS = outS + '\n'.join(['\t'.join(x) for x in sortedOBJL]) + "\nPoolCovScpre=\t" + str(ScoreFL[1]) +"\t"+ ScoreFL[0][0][1] + "\tTXnumS=\t"+TXnumS +  "\n############\n"		
+		outS = outS + str(ScoreFL[0]).replace("""],""","""]\n""") + "\n############\n"
+	#STDERR(group(selectOJBL)[0])
+	return outS
+
+def main2(INS):
+	INL = (chop(INS))
+	hitOBJL = [hit(x) for x in INL]
+	#hitOBJL = [x for x in hitOBJL if TruncateCheck(x,10) == 1] ##remove truncated hit before processing
+	selectOJBL = [x for x in hitOBJL if x.qcovsF > __QCovF__ and x.evalueF < __EvalF__]
+
+	#selectOJBL = selectOJBL[0:1000] ##DEBUG
+	#STDERR([x.AttributesL for x in selectOJBL[0:2]]) ##DEBUG
+	#STDERR("entering group function") ##DEBUG
+	outS = ''
+	#for OBJL in group(selectOJBL):
+	for OBJL in Pgroup(selectOJBL):
+		ScoreFL = GroupScore(OBJL)
+		sortedOBJL = sorted([x.AttributesL for x in OBJL], key=lambda x:(int(x[8]) + int(x[9]))/2 )
 		TXnumS = str(len(ScoreFL[0]))
 		outS = outS + '\n'.join(['\t'.join(x) for x in sortedOBJL]) + "\nPoolCovScpre=\t" + str(ScoreFL[1]) +"\t"+ ScoreFL[0][0][1] + "\tTXnumS=\t"+TXnumS +  "\n############\n"		
 		outS = outS + str(ScoreFL[0]).replace("""],""","""]\n""") + "\n############\n"

@@ -304,8 +304,19 @@ def bitselect(clustL,mode):
 		if   mode == "1":midL = sorted(midL,key = lambda midL:midL[-2])[0:5] #Top five least bitscore
 		elif mode == "2":midL = bitpick(midL) #average bit score 
 		elif mode == "3":midL = sorted(midL,key = lambda midL:abs(abs(midL[7] - midL[6]) - medL))[0:5] #selecting by median length
-		elif mode == "4":midL = sorted(midL,key = lambda midL:float(midL[11]))[::-1][0:5] #select five most similar sequences (tpo 5 maximum bit score)
+		elif mode == "4":midL = sorted(midL,key = lambda midL:float(midL[11]))[::-1][0:5] #select five most similar sequences (top 5 maximum bit score)
 		elif mode == "5":midL = sorted(midL,key = lambda midL:abs(midL[13]-medp))[0:5] #select five middle sequences, sorted by middle position on target sequence 
+	return midL
+
+def bitselect2(clustL,mode,seqNumI):
+
+	midL,median,medL,medp = mid(clustL)
+	if len(midL) > 5:
+		if   mode == "1":midL = sorted(midL,key = lambda midL:midL[-2])[0:seqNumI] #Top five least bitscore
+		elif mode == "2":midL = bitpick(midL) #average bit score 
+		elif mode == "3":midL = sorted(midL,key = lambda midL:abs(abs(midL[7] - midL[6]) - medL))[0:seqNumI] #selecting by median length
+		elif mode == "4":midL = sorted(midL,key = lambda midL:float(midL[11]))[::-1][0:seqNumI] #select five most similar sequences (top 5 maximum bit score)
+		elif mode == "5":midL = sorted(midL,key = lambda midL:abs(midL[13]-medp))[0:seqNumI] #select five middle sequences, sorted by middle position on target sequence 
 	return midL
 
 def mid(clustL):
@@ -336,6 +347,21 @@ def bitpick(bitL):
 	lastL = bitL.pop(-1)
 	#sum
 	for i in (0.25,0.50,0.75):		
+		bitL = sorted(bitL, key=lambda bitL:abs(bitL[-2] - bitsum*i))
+		aL.append(bitL.pop(0))
+	aL.append(lastL)  
+	return aL
+
+def bitpick2(bitL,seqNumI):
+	bitsum = [x[-2] for x in bitL]
+	bitsum = sum(bitsum)/len(bitsum)
+
+	bitL = sorted(bitL, key=lambda bitL:bitL[-2])
+	aL = [bitL.pop(0)]
+	lastL = bitL.pop(-1)
+	#sum
+	
+	for i in range(1.0/(seqNumI*1.0),1.0):		
 		bitL = sorted(bitL, key=lambda bitL:abs(bitL[-2] - bitsum*i))
 		aL.append(bitL.pop(0))
 	aL.append(lastL)  
@@ -715,7 +741,7 @@ def MSAgen5(alignS,Ip):
 			#label = Ilngth  - abs(len(Dn[n])  - Jlngth) #fix space filling step
 			label = Dn2[n]+' '*label
 			alignout = alignout.replace(n,label)
-		Saster = '\n '+(' '*(Ilngth - Klngth + Jlngth))
+		Saster = '\n '+(' '*(Ilngth - Klngth + Jlngth + 1))
 		alignout = alignout.replace('\n ',Saster)
 		#alignout = Salignout.replace('#',' ')
 		
