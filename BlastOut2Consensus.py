@@ -246,13 +246,15 @@ def AlignImprove(FastaAlignmentS):
 	alignLenI = len(scoredL[0][0][1])
 	kickL = [x[0] for x in scoredL if x[5] > 0 ]#or float(x[4])/float(alignLenI) > 0.1]
 	selectedL = [x for x in scoredL if x[0] not in kickL ]
+	selectedNameL = [x[0][0] for x in selectedL]
+	kickNameL = [x[0] for x in kickL]
 	if len(kickL) == 0: 
 		NewFastaAlignmentS = FastaAlignmentS
 	else:
 		ToAlignS = '\n'.join(['\n'.join(x[0]) for x in selectedL])
 		NewFastaAlignmentS = musclecall(ToAlignS)
 	
-	return [NewFastaAlignmentS,kickL]
+	return [NewFastaAlignmentS,kickL,selectedNameL,kickNameL]
 
 
 def consensusExtractKW(MSAfasta,GapWeightF,MinPF,GapIgnoreFlagI): ##MinPF = minimum percent for consensus
@@ -343,6 +345,8 @@ def main(INS): ##Take input as blast(n,x) result string
 		consensusS = consensusExtractKW(NewAlignS,0,0.01,1) ##Generate consensus with Minnimum base ration and ignore gap 
 		STDERR("consensusS=",consensusS)
 		STDERR("AlignImproveL=",AlignImproveL[1])
+		STDERR("selectedNameL=",AlignImproveL[2])
+		STDERR("kickNameL=",AlignImproveL[3])
 		
 
 
