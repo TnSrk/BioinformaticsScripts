@@ -192,7 +192,70 @@ def musclecall(SeqS):
 		x = '0'
 	return x
 
-def consensusExtractKW(MSAfasta,GapWeightF,MinPF): ##MinPF = minimum percent for consensus
+def musclecallCLW(SeqS):
+	#SeqS = self.SeqS
+	#arg = "muscle -maxiters 32 -gapopen -1200 -quiet"
+	arg = "muscle -maxiters 32 -quiet -clw"
+	process = subprocess.Popen(arg, shell=True, stdin=subprocess.PIPE,stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+	x = process.communicate(SeqS)[0]
+	if len(x) == 0:
+		x = '0'
+	return x
+
+def AlignCheck(MSAfasta):
+	SeqsL = MSAfasta.split('>') ## Take input aligment as fasta format
+	SeqsL = ['>' + x for x in SeqsL if len(x) > 0] ##Eliminate empty items
+	SeqsL = [FastaTool(x) for x in SeqsL] ## Create fasta object for each sequences
+	conS  = ">CoNs\n" +  consensusExtractKW(MSAfasta,0,0.1) + "\n" ##Create consensus from input alignment 
+	scoreL = [] ## Empty list for score storing
+	for i in SeqSL:
+		ToalignS = conS + i.FastaInS + "\n"
+		NewAlign = musclecall(ToalignS)
+		SeqsL = MSAfasta.split('>') ## Take input aligment as fasta format
+		SeqsL = ['>' + x for x in SeqsL if len(x) > 0] ##Eliminate empty items
+		NewAlignS = [''.join(x.splitlines()[1:]) for x in SeqsL if len(x) > 0 and x.find("CoNs") != 0][0] ##Eliminate empty items
+		alignLenI = len(NewAlignS)
+		NewHeadGap = alignLenI - len(NewAlignS.lstrip("-")) #count lead gap in alignment
+		NewTailGap = alignLenI - len(NewAlignS.rstrip("-")) #count tail gap in alignment
+		NewinnerGap = alignLenI - len(NewAlignS.strip("-")) #count inner gap in alignment
+		GapCountL = [conS,NewHeadGap,NewTailGap,NewinnerGap]
+		scoreL.append(GapCountL)
+				
+		del SeqsL
+
+def AlignScore(MSAfasta):
+	SeqsL = MSAfasta.split('>') ## Take input aligment as fasta format
+	SeqsL = ['>' + x for x in SeqsL if len(x) > 0] ##Eliminate empty items
+	SeqsL = [[x.splitlines()[0],''.join(x.splitlines()[1:])] for x in SeqsL] ## Separate each sequences
+	scoredL = [] ## Empty list for score storing
+	alignLenI = len(SeqsL[0][1])
+	for seqS in SeqsL:
+		AllGapI = seqS[1].count("-")
+		HeadGapI = alignLenI - len(seqS[1].lstrip("-")) #count lead gap in alignment
+		TailGapI = alignLenI - len(seqS[1].rstrip("-")) #count tail gap in alignment
+		InnerGapI = AllGapI - (HeadGapI + TailGapI) #count inner gap in alignment
+		InnerGapOpenI = len([x for x in seqS[1].strip("-").split("-") if len(x) > 0]) - 1 #count inner gap opening in alignment
+		GapCountL = [seqS, AllGapI, HeadGapI, TailGapI, InnerGapI, InnerGapOpenI]
+		scoredL.append(GapCountL)
+	
+	return 	scoredL
+
+def AlignImprove(FastaAlignmentS):
+	scoredL = AlignScore(FastaAlignmentS)
+	STDERR("scoredL=",scoredL) ##DEBUG
+	alignLenI = len(scoredL[0][0][1])
+	kickL = [x[0] for x in scoredL if x[5] > 0 ]#or float(x[4])/float(alignLenI) > 0.1]
+	selectedL = [x for x in scoredL if x[0] not in kickL ]
+	if len(kickL) == 0: 
+		NewFastaAlignmentS = FastaAlignmentS
+	else:
+		ToAlignS = '\n'.join(['\n'.join(x[0]) for x in selectedL])
+		NewFastaAlignmentS = musclecall(ToAlignS)
+	
+	return [NewFastaAlignmentS,kickL]
+
+
+def consensusExtractKW(MSAfasta,GapWeightF,MinPF,GapIgnoreFlagI): ##MinPF = minimum percent for consensus
 
 	SeqsL = MSAfasta.split('>') ## Take input aligment as fasta format
 	SeqsL = ['>' + x for x in SeqsL if len(x) > 0] ##Eliminate empty items
@@ -210,15 +273,19 @@ def consensusExtractKW(MSAfasta,GapWeightF,MinPF): ##MinPF = minimum percent for
 	for i in range(len(SeqsL[0])): ## loop over coluns of alignment
 		anMSAcolumnL = [x[i] for x in SeqsL] ## extract each base from each sequences in column i_th
 		NucD = {} ## create dictionary for keep bases occurence
-		NucD['A'] = float(anMSAcolumnL.count('A')/columndepthF) ## calculate base "A" ratio
-		NucD['T'] = float(anMSAcolumnL.count('T')/columndepthF) ## calculate base "T" ratio
-		NucD['G'] = float(anMSAcolumnL.count('G')/columndepthF) ## calculate base "G" ratio
-		NucD['C'] = float(anMSAcolumnL.count('C')/columndepthF) ## calculate base "C" ratio
-		NucD[GapS] = float((anMSAcolumnL.count(GapS)/columndepthF)*GapWeightF) ## calculate gap ratio
+		RAWGapF = float(anMSAcolumnL.count(GapS))/columndepthF ## calculate gap ratio
+		NucD[GapS] = RAWGapF*GapWeightF ## calculate gap ratio
+		NucD['A'] = float(anMSAcolumnL.count('A'))/columndepthF ## calculate base "A" ratio
+		NucD['T'] = float(anMSAcolumnL.count('T'))/columndepthF ## calculate base "T" ratio
+		NucD['G'] = float(anMSAcolumnL.count('G'))/columndepthF ## calculate base "G" ratio
+		NucD['C'] = float(anMSAcolumnL.count('C'))/columndepthF ## calculate base "C" ratio		
 
 		VotesNumF = max(NucD.values()) ## select max occurences
 		VotesL = [x for x in NucD if NucD[x] == VotesNumF] ## find out which base is the most popular
-		VotesL = [x for x in NucD if NucD[x] == VotesNumF and NucD[x] >= MinPF]  ##  if the base is not popular enought then vote to N
+		if GapIgnoreFlagI == 0:
+			VotesL = [x for x in NucD if NucD[x] == VotesNumF and NucD[x] >= MinPF]  ##  if the base is not popular enought then vote to N
+		elif GapIgnoreFlagI == 1:
+			VotesL = [x for x in NucD if NucD[x] == VotesNumF and NucD[x] >= (MinPF - NucD[GapS])] ## To ignore gap, reduces gap weight by gap ratio
 		if len(VotesL) == 0: ## If there is not a popular one then vtoe to N for the column
 			VotesL = ['N']
 
@@ -267,9 +334,15 @@ def main(INS): ##Take input as blast(n,x) result string
 		#STDERR("ToAlignSeqSL\n",ToAlignSeqSS)
 		ToAlignSeqSS = PreAlign(i)
 		FastaAlignmentS = musclecall(ToAlignSeqSS)
-		#STDERR("FastaAlignmentS=",FastaAlignmentS)
-		consensusS = consensusExtractKW(FastaAlignmentS,0,0.01)
-		print consensusS
+		FastaAlignmentSclw = musclecallCLW(ToAlignSeqSS)
+		STDERR("FastaAlignmentS=",FastaAlignmentSclw)##DEBUG		
+		
+		AlignImproveL = AlignImprove(FastaAlignmentS)	
+		NewAlignS = AlignImproveL[0]
+		STDERR("NewAlignS=",NewAlignS) ##DEBUG
+		consensusS = consensusExtractKW(NewAlignS,0,0.01,1) ##Generate consensus with Minnimum base ration and ignore gap 
+		STDERR("consensusS=",consensusS)
+		STDERR("AlignImproveL=",AlignImproveL[1])
 		
 
 
