@@ -223,10 +223,8 @@ def AlignCheck(MSAfasta):
 				
 		del SeqsL
 
-def AlignScore(MSAfasta):
-	SeqsL = MSAfasta.split('>') ## Take input aligment as fasta format
-	SeqsL = ['>' + x for x in SeqsL if len(x) > 0] ##Eliminate empty items
-	SeqsL = [[x.splitlines()[0],''.join(x.splitlines()[1:])] for x in SeqsL] ## Separate each sequences
+def AlignScore(SeqsL):
+
 	scoredL = [] ## Empty list for score storing
 	alignLenI = len(SeqsL[0][1])
 	for seqS in SeqsL:
@@ -240,20 +238,42 @@ def AlignScore(MSAfasta):
 	
 	return 	scoredL
 
-def AlignImprove(FastaAlignmentS):
-	scoredL = AlignScore(FastaAlignmentS)
-	STDERR("scoredL=",scoredL) ##DEBUG
-	alignLenI = len(scoredL[0][0][1])
-	kickL = [x[0] for x in scoredL if x[5] > 0 ]#or float(x[4])/float(alignLenI) > 0.1]
-	selectedL = [x for x in scoredL if x[0] not in kickL ]
-	selectedNameL = [x[0][0] for x in selectedL]
-	kickNameL = [x[0] for x in kickL]
+def AlignImprove(MSAfasta):
+
+	SeqsL = MSAfasta.split('>') ## Take input aligment as fasta format
+	SeqsL = ['>' + x for x in SeqsL if len(x) > 0] ##Eliminate empty items
+	SeqsL = [[x.splitlines()[0],''.join(x.splitlines()[1:])] for x in SeqsL] ## Separate each sequences
+	selectedNameL = []
+	iterNUMI = 0
+	while len(selectedNameL) == 0 and iterNUMI < 20:
+		scoredL = AlignScore(SeqsL)
+		STDERR("scoredL=",scoredL) ##DEBUG
+		#alignLenI = len(scoredL[0][0][1])
+		kickL = [x[0] for x in scoredL if x[5] > 0 ]#or float(x[4])/float(alignLenI) > 0.1]
+		selectedL = [x for x in scoredL if x[0] not in kickL ]
+		selectedNameL = [x[0][0] for x in selectedL]
+		kickNameL = [x[0] for x in kickL]
+		STDERR("selectedNameL=",selectedNameL) ##DEBUG		
+		if len(selectedNameL) == 0:
+			ExcludeSeqNameS = sorted(scoredL, key = lambda x:(x[0],x[4]))[-1][0][0].split()[0] ##get name of gap-prone sequence 
+			SeqsL = [x for x in SeqsL if x[0].find(ExcludeSeqNameS) == -1] ##remove gap-prone sequence from alignment-to-be sequences set		
+			STDERR("ExcludeSeqNameS=",ExcludeSeqNameS) ##DEBUG
+		iterNUMI += 1
+		
+
 	if len(kickL) == 0: 
-		NewFastaAlignmentS = FastaAlignmentS
+		NewFastaAlignmentS = MSAfasta
 	else:
 		ToAlignS = '\n'.join(['\n'.join(x[0]) for x in selectedL])
 		NewFastaAlignmentS = musclecall(ToAlignS)
-	
+
+	#if len(selectedL) == 0:
+	#	selectedL
+	STDERR("NewFastaAlignmentS=",NewFastaAlignmentS) ##DEBUG
+	STDERR("kickL=",kickL) ##DEBUG
+	STDERR("selectedNameL=",selectedNameL) ##DEBUG
+	STDERR("kickNameL=",kickNameL) ##DEBUG
+
 	return [NewFastaAlignmentS,kickL,selectedNameL,kickNameL]
 
 
@@ -326,10 +346,10 @@ def PreAlign(SubClusterL):
 	return ToAlignSeqSS
 	
 
-def main(INS): ##Take input as blast(n,x) result string
-	cookedBlastL = [hit(x) for x in chop(INS)] #transform blast result into list of blast hit object
-	ClusteredL = merge4(cookedBlastL,0.05)
-	STDERR("len(ClusteredL)=",len(ClusteredL))##DEBUG
+def main(SubcookedBlastL): ##Take input as blast(n,x) result string
+	#cookedBlastL = [hit(x) for x in chop(INS)] #transform blast result into list of blast hit object
+	ClusteredL = merge4(SubcookedBlastL,0.05)
+	#STDERR("len(ClusteredL)=",len(ClusteredL))##DEBUG
 	for i in ClusteredL: 
 		STDERR('\n'.join([str(x.AttributesL) for x in i])) ##DEBUG
 		STDERR("Each iter in ClusteredL ++++++++++++++++++++") ##DEBUG
@@ -347,6 +367,31 @@ def main(INS): ##Take input as blast(n,x) result string
 		STDERR("AlignImproveL=",AlignImproveL[1])
 		STDERR("selectedNameL=",AlignImproveL[2])
 		STDERR("kickNameL=",AlignImproveL[3])
+		return AlignImproveL
+
+def main0(INS):
+	cookedBlastL = sorted([hit(x) for x in chop(INS)], key=lambda x: (x.qlenI,x.qseqidS) )[::-1]
+	ContigNamelistL = ['']
+	for i in cookedBlastL:
+		if i.qseqidS != ContigNamelistL[-1] or i.qseqidS.split()[0].replace('lcl|','') not in ContigNamelistL:
+			ContigNamelistL.append(i.qseqidS.split()[0].replace('lcl|',''))
+
+	ContigNamelistL.pop(0)
+	STDERR("ContigNamelistL[0:4]=",ContigNamelistL[0:4]) ##DEBUG	
+	STDERR("len(ContigNamelistL)=",len(ContigNamelistL)) ##DEBUG
+	while len(ContigNamelistL) > 0:
+		CurrentNameS = ContigNamelistL[0]
+		STDERR("CurrentNameS=",CurrentNameS) ##DEBUG
+		SubcookedBlastL = [x for x in cookedBlastL if x.qseqidS.split()[0].replace('lcl|','') == CurrentNameS]
+		STDERR("SubcookedBlastL=",SubcookedBlastL) ##DEBUG
+		AlignImproveL = main(SubcookedBlastL)
+		kickNamesL =  [y.split()[0].replace('>lcl|','') for y in AlignImproveL[2]]
+		STDERR("kickNamesL=",kickNamesL) ##DEBUG
+		ContigNamelistL = [x for x in ContigNamelistL if x not in kickNamesL]
+		STDERR("len(ContigNamelistL)=",len(ContigNamelistL)) ##DEBUG
+		
+
+	
 		
 
 
@@ -376,11 +421,11 @@ else:#open file
 	INS = f.read()
 	f.close()
 if options.o == '0': ##print output to pipe
-	main(INS)
+	main0(INS)
 	#print(main(INS))
 else:#write output to a flie
 	f=open(options.o,'w')
-	f.write(Main(INS))
+	f.write(main0(INS))
 	f.close()	
 
 
