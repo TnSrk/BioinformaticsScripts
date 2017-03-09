@@ -238,34 +238,58 @@ def AlignScore(SeqsL):
 	
 	return 	scoredL
 
-def AlignImprove(MSAfasta):
+def MSAfastaSplit(MSAfasta):
+	MSAfastaL = MSAfasta.split('>') ## Take input aligment as fasta format
+	MSAfastaL = ['>' + x for x in MSAfastaL if len(x) > 0] ##Eliminate empty items
+	MSAfastaL = [[x.splitlines()[0],''.join(x.splitlines()[1:])] for x in MSAfastaL] ## Separate each sequences
+	return MSAfastaL
 
-	SeqsL = MSAfasta.split('>') ## Take input aligment as fasta format
-	SeqsL = ['>' + x for x in SeqsL if len(x) > 0] ##Eliminate empty items
-	SeqsL = [[x.splitlines()[0],''.join(x.splitlines()[1:])] for x in SeqsL] ## Separate each sequences
+def UglyKicker(scoredL):
+	EvrGapF = float(sum( [ x[5] for x in scoredL]))/float(len(scoredL))
+	EvrInnerGapF = float(sum( [ x[4] for x in scoredL]))/float(len(scoredL))
+	ExcludeSeqNameS = sorted(scoredL, key = lambda x:(abs(float(x[5]) - EvrGapF) + abs(float(x[4]) - EvrGapF)) )[-1][0][0].split()[0] ##get name of gap-prone sequence 
+	ToAlignS = '\n'.join([x[0]+"\n"+x[1].replace('-','') for x in MSAfastaL if x[0].find(ExcludeSeqNameS) == -1])
+	return snatch_scoredL
+
+def AlignImprove(MSAfasta):
+	MSAfastaL = MSAfastaSplit(MSAfasta)
 	selectedNameL = []
 	iterNUMI = 0
+	SeqsL = MSAfastaL[:]
+	STDERR("Before WHILE LOOP MSAfastaL",[x[0] for x in])
 	while len(selectedNameL) == 0 and iterNUMI < 20:
 		scoredL = AlignScore(SeqsL)
-		STDERR("scoredL=",scoredL) ##DEBUG
+		EvrGapF = float(sum( [ x[5] for x in scoredL]))/float(len(scoredL))
+		EvrInnerGapF = float(sum( [ x[4] for x in scoredL]))/float(len(scoredL))
+		#STDERR("scoredL=",scoredL) ##DEBUG
 		#alignLenI = len(scoredL[0][0][1])
 		kickL = [x[0] for x in scoredL if x[5] > 0 ]#or float(x[4])/float(alignLenI) > 0.1]
 		selectedL = [x for x in scoredL if x[0] not in kickL ]
 		selectedNameL = [x[0][0] for x in selectedL]
 		kickNameL = [x[0] for x in kickL]
-		STDERR("selectedNameL=",selectedNameL) ##DEBUG		
+		#STDERR("selectedNameL=",selectedNameL) ##DEBUG		
 		if len(selectedNameL) == 0:
-			ExcludeSeqNameS = sorted(scoredL, key = lambda x:(x[0],x[4]))[-1][0][0].split()[0] ##get name of gap-prone sequence 
-			SeqsL = [x for x in SeqsL if x[0].find(ExcludeSeqNameS) == -1] ##remove gap-prone sequence from alignment-to-be sequences set		
-			STDERR("ExcludeSeqNameS=",ExcludeSeqNameS) ##DEBUG
+			EvrGapF = float(sum( [ x[5] for x in scoredL]))/float(len(scoredL))
+			EvrInnerGapF = float(sum( [ x[4] for x in scoredL]))/float(len(scoredL))
+			ExcludeSeqNameS = sorted(scoredL, key = lambda x:(abs(float(x[5]) - EvrGapF) + abs(float(x[4]) - EvrGapF)) )[-1][0][0].split()[0] ##get name of gap-prone sequence 
+			ToAlignS = '\n'.join([x[0]+"\n"+x[1].replace('-','') for x in MSAfastaL if x[0].find(ExcludeSeqNameS) == -1])
+			STDERR("ToAlignS=",ToAlignS) ##DEBUG
+			NewFastaAlignmentS = musclecall(ToAlignS)
+			SeqsL = MSAfastaSplit(NewFastaAlignmentS) 
+			#SeqsL = [[x[0],x[1].replace('-','')] for x in MSAfastaL if x[0].find(ExcludeSeqNameS) == -1] ##remove gap-prone sequence from alignment-to-be sequences set
+			#STDERR("While_NewFastaAlignmentS=",NewFastaAlignmentS) ##DEBUG
+			#STDERR("ExcludeSeqNameS=",ExcludeSeqNameS) ##DEBUG
 		iterNUMI += 1
 		
 
 	if len(kickL) == 0: 
 		NewFastaAlignmentS = MSAfasta
-	else:
+
+	if len(kickL) != 0 and len(selectedL) > 1:
 		ToAlignS = '\n'.join(['\n'.join(x[0]) for x in selectedL])
 		NewFastaAlignmentS = musclecall(ToAlignS)
+	elif len(kickL) != 0 and len(selectedL) == 1:
+		STDERR("selectedL=1 ::",selectedL) ##DEBUG
 
 	#if len(selectedL) == 0:
 	#	selectedL
@@ -361,10 +385,10 @@ def main(SubcookedBlastL): ##Take input as blast(n,x) result string
 		
 		AlignImproveL = AlignImprove(FastaAlignmentS)	
 		NewAlignS = AlignImproveL[0]
-		STDERR("NewAlignS=",NewAlignS) ##DEBUG
+		#STDERR("NewAlignS=",NewAlignS) ##DEBUG
 		consensusS = consensusExtractKW(NewAlignS,0,0.01,1) ##Generate consensus with Minnimum base ration and ignore gap 
 		STDERR("consensusS=",consensusS)
-		STDERR("AlignImproveL=",AlignImproveL[1])
+		#STDERR("AlignImproveL[1]=",AlignImproveL[1])
 		STDERR("selectedNameL=",AlignImproveL[2])
 		STDERR("kickNameL=",AlignImproveL[3])
 		return AlignImproveL
@@ -377,8 +401,8 @@ def main0(INS):
 			ContigNamelistL.append(i.qseqidS.split()[0].replace('lcl|',''))
 
 	ContigNamelistL.pop(0)
-	STDERR("ContigNamelistL[0:4]=",ContigNamelistL[0:4]) ##DEBUG	
-	STDERR("len(ContigNamelistL)=",len(ContigNamelistL)) ##DEBUG
+	#STDERR("ContigNamelistL[0:4]=",ContigNamelistL[0:4]) ##DEBUG	
+	#STDERR("len(ContigNamelistL)=",len(ContigNamelistL)) ##DEBUG
 	while len(ContigNamelistL) > 0:
 		CurrentNameS = ContigNamelistL[0]
 		STDERR("CurrentNameS=",CurrentNameS) ##DEBUG
