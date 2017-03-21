@@ -242,7 +242,7 @@ def MSAfastaSplit(MSAfasta):
 	MSAfastaL = MSAfasta.split('>') ## Take input aligment as fasta format
 	MSAfastaL = ['>' + x for x in MSAfastaL if len(x) > 0] ##Eliminate empty items
 	MSAfastaL = [[x.splitlines()[0],''.join(x.splitlines()[1:])] for x in MSAfastaL] ## Separate each sequences
-	return MSAfastaL
+	return MSAfastaL ##Return 2D List [[NameS,seqS],[NameS,seqS]]
 
 def UglyKicker(scoredL):
 	EvrGapF = float(sum( [ x[5] for x in scoredL]))/float(len(scoredL))
@@ -251,12 +251,28 @@ def UglyKicker(scoredL):
 	ToAlignS = '\n'.join([x[0]+"\n"+x[1].replace('-','') for x in MSAfastaL if x[0].find(ExcludeSeqNameS) == -1])
 	return snatch_scoredL
 
+def SimilarPick(TargetSeqS,RelatedSeqSL,InnerGapLimitI): ## Aling Each match Sequences to target sequences then pick only one with no gap more than threshold
+	TagetSeqNameS = TargetSeqS.splitlines()[0].split()[0]
+	PickedL = [TargetSeqS]
+	for i in RelatedSeqSL:
+		ToALignS = TargetSeqS + "\n" + i
+		MSAfastaS =  musclecall(ToALignS)
+		#STDERR("SimilarPick.MSAfastaSplit(MSAfastaS)=",MSAfastaSplit(MSAfastaS))
+		MSAfastaL = [x for x in MSAfastaSplit(MSAfastaS) if x[0].find(TagetSeqNameS) == -1]
+		#STDERR("SimilarPick.MSAfastaL=",MSAfastaL)
+		scoredL = AlignScore(MSAfastaL)
+		for each in scoredL: 
+			if each[5] <= InnerGapLimitI:
+				PickedL.append(each[0][0]+"\n"+each[0][1].replace("-",""))
+
+	return PickedL ## return [TargetSeqS, PickedSeqS1st, .... , PickedSeqSNth]
+
 def AlignImprove(MSAfasta):
 	MSAfastaL = MSAfastaSplit(MSAfasta)
 	selectedNameL = []
 	iterNUMI = 0
 	SeqsL = MSAfastaL[:]
-	STDERR("Before WHILE LOOP MSAfastaL",[x[0] for x in])
+	STDERR("Before WHILE LOOP MSAfastaL",[x[0] for x in SeqsL])
 	while len(selectedNameL) == 0 and iterNUMI < 20:
 		scoredL = AlignScore(SeqsL)
 		EvrGapF = float(sum( [ x[5] for x in scoredL]))/float(len(scoredL))
@@ -370,7 +386,7 @@ def PreAlign(SubClusterL):
 	return ToAlignSeqSS
 	
 
-def main(SubcookedBlastL): ##Take input as blast(n,x) result string
+def main(SubcookedBlastL): ##Take input as PROCESSED blast(n,x) results LIST
 	#cookedBlastL = [hit(x) for x in chop(INS)] #transform blast result into list of blast hit object
 	ClusteredL = merge4(SubcookedBlastL,0.05)
 	#STDERR("len(ClusteredL)=",len(ClusteredL))##DEBUG
@@ -393,31 +409,74 @@ def main(SubcookedBlastL): ##Take input as blast(n,x) result string
 		STDERR("kickNameL=",AlignImproveL[3])
 		return AlignImproveL
 
+def main1(CurrentNameS,SubcookedBlastL): ## Direct Checking Matched sequence by Performing Alignment
+	ClusteredL = merge4(SubcookedBlastL,0.05)
+	#STDERR("main1.ClusteredL=",ClusteredL)
+	SelectedClustL = []
+	for i in ClusteredL:
+		if len([x.sseqidS.find(CurrentNameS) != -1 for x in i ]) > 0:
+			SelectedClustL.append(i) 
+		
+	SeqSL = [">" + x for x in PreAlign(SelectedClustL[0]).split(">") if len(x) > 3]
+	#STDERR("main1.SeqSL=",SeqSL)
+	CurrentSeqS = [x for x in SeqSL if x.find(CurrentNameS+" ") != -1][0]
+	CompareSeqSL = [x for x in SeqSL if x.find(CurrentNameS+" ") == -1]
+	PickedL = SimilarPick(CurrentSeqS,CompareSeqSL,0)
+
+	return PickedL ## [TargetSeqS, PickedSeqS1st, .... , PickedSeqSNth]
+	
+
+
 def main0(INS):
-	cookedBlastL = sorted([hit(x) for x in chop(INS)], key=lambda x: (x.qlenI,x.qseqidS) )[::-1]
+	#cookedBlastL = sorted([hit(x) for x in chop(INS)], key=lambda x: x.qlenI )[::-1]
+	cookedBlastL = sorted([hit(x) for x in chop(INS)], key=lambda x: ( x.qlenI,x.qseqidS )  )[::-1]	
+	STDERR("len(cookedBlastL)=",len(cookedBlastL))
+	STDERR("cookedBlastL[:5]=",cookedBlastL[:5])
 	ContigNamelistL = ['']
 	for i in cookedBlastL:
 		if i.qseqidS != ContigNamelistL[-1] or i.qseqidS.split()[0].replace('lcl|','') not in ContigNamelistL:
+		#if i.qseqidS.split()[0].replace('lcl|','') not in ContigNamelistL:
 			ContigNamelistL.append(i.qseqidS.split()[0].replace('lcl|',''))
+		STDERR(i.qseqidS,i.qlenI) ##DEBUG
 
 	ContigNamelistL.pop(0)
 	#STDERR("ContigNamelistL[0:4]=",ContigNamelistL[0:4]) ##DEBUG	
 	#STDERR("len(ContigNamelistL)=",len(ContigNamelistL)) ##DEBUG
-	while len(ContigNamelistL) > 0:
-		CurrentNameS = ContigNamelistL[0]
-		STDERR("CurrentNameS=",CurrentNameS) ##DEBUG
-		SubcookedBlastL = [x for x in cookedBlastL if x.qseqidS.split()[0].replace('lcl|','') == CurrentNameS]
-		STDERR("SubcookedBlastL=",SubcookedBlastL) ##DEBUG
-		AlignImproveL = main(SubcookedBlastL)
-		kickNamesL =  [y.split()[0].replace('>lcl|','') for y in AlignImproveL[2]]
-		STDERR("kickNamesL=",kickNamesL) ##DEBUG
-		ContigNamelistL = [x for x in ContigNamelistL if x not in kickNamesL]
-		STDERR("len(ContigNamelistL)=",len(ContigNamelistL)) ##DEBUG
-		
 
+	if options.o != '0':
+		f=open(options.o,'w')
 	
 		
+	while len(ContigNamelistL) > 0:
+		CurrentNameS = ContigNamelistL.pop(0) ## Pop 1 of name in the list to use as seed 
+		STDERR("CurrentNameS=",CurrentNameS) ##DEBUG
+		SubcookedBlastL = [x for x in cookedBlastL if x.qseqidS.split()[0].replace('lcl|','') == CurrentNameS]
+		#STDERR("SubcookedBlastL=",SubcookedBlastL) ##DEBUG
+		selectedSeqSL = main1(CurrentNameS,SubcookedBlastL) ## Get Sequnces to create consensus and remove the member from ContigNamelistL
+		PickedOBJL = [FastaTool(x) for x in selectedSeqSL] ## Transform each SeqS into Fasta object
+		#STDERR("selectedSeqS=",selectedSeqS)
+		if len(selectedSeqSL) == 1:
+			consensusS = selectedSeqSL[0]
+		elif selectedSeqSL > 1:
+			FastaAlignmentS = musclecall('\n'.join(selectedSeqSL))
+			consensusS = ">"+ CurrentNameS + " ConS\n" + consensusExtractKW(FastaAlignmentS,0,0.01,1) + "\n"
+		STDERR("main0.consensusS=",consensusS) ##DEBUG
+		ExcludeNameL = [x.name() for x in PickedOBJL] ## Get Name For Excluding
+		STDERR("main0.ExcludeNameL=",ExcludeNameL) ##DEBUG
 
+		ContigNamelistL = [x for x in ContigNamelistL if x not in ExcludeNameL]
+		STDERR("######## len(ContigNamelistL)=",len(ContigNamelistL)) ##DEBUG
+		
+		MemberS = ";".join(ExcludeNameL)
+		STDERR("main0.MemberS=",MemberS)
+		
+		if options.o != '0':
+			f.write(consensusS)
+		else:
+			print consensusS.strip()
+
+	if options.o != '0':		
+		f.close()
 
 ### Input and Option 
 usage = "python Blastout2cnsensus.py -i input.gff -o out_file"
