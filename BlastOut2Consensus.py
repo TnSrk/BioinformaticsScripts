@@ -411,11 +411,13 @@ def main(SubcookedBlastL): ##Take input as PROCESSED blast(n,x) results LIST
 
 def main1(CurrentNameS,SubcookedBlastL): ## Direct Checking Matched sequence by Performing Alignment
 	ClusteredL = merge4(SubcookedBlastL,0.05)
-	#STDERR("main1.ClusteredL=",ClusteredL)
+	STDERR("main1.CurrentNameS",CurrentNameS)
+	STDERR("main1.ClusteredL=",[[x.sseqidS for x in y ] for y in ClusteredL])
 	SelectedClustL = []
 	for i in ClusteredL:
 		if len([x.sseqidS.find(CurrentNameS) != -1 for x in i ]) > 0:
 			SelectedClustL.append(i) 
+	
 		
 	SeqSL = [">" + x for x in PreAlign(SelectedClustL[0]).split(">") if len(x) > 3]
 	#STDERR("main1.SeqSL=",SeqSL)
@@ -432,14 +434,19 @@ def main0(INS):
 	cookedBlastL = sorted([hit(x) for x in chop(INS)], key=lambda x: ( x.qlenI,x.qseqidS )  )[::-1]	
 	STDERR("len(cookedBlastL)=",len(cookedBlastL))
 	STDERR("cookedBlastL[:5]=",cookedBlastL[:5])
-	ContigNamelistL = ['']
+	ContigNamelistL = [''] ## First element is used to compare next element which will be add
+	GlobalExcludeL = []
 	for i in cookedBlastL:
-		if i.qseqidS != ContigNamelistL[-1] or i.qseqidS.split()[0].replace('lcl|','') not in ContigNamelistL:
+		TMPnameS = i.qseqidS.split()[0].split('|')[1]
+		if TMPnameS != ContigNamelistL[-1] and TMPnameS not in ContigNamelistL:
 		#if i.qseqidS.split()[0].replace('lcl|','') not in ContigNamelistL:
-			ContigNamelistL.append(i.qseqidS.split()[0].replace('lcl|',''))
+			ContigNamelistL.append(TMPnameS)
 		STDERR(i.qseqidS,i.qlenI) ##DEBUG
 
-	ContigNamelistL.pop(0)
+	ContigNamelistL.pop(0) ## Remove First Element which is empty string
+
+	STDERR("######## len(ContigNamelistL)=",len(ContigNamelistL))
+	
 	#STDERR("ContigNamelistL[0:4]=",ContigNamelistL[0:4]) ##DEBUG	
 	#STDERR("len(ContigNamelistL)=",len(ContigNamelistL)) ##DEBUG
 
@@ -450,9 +457,17 @@ def main0(INS):
 	while len(ContigNamelistL) > 0:
 		CurrentNameS = ContigNamelistL.pop(0) ## Pop 1 of name in the list to use as seed 
 		STDERR("CurrentNameS=",CurrentNameS) ##DEBUG
-		SubcookedBlastL = [x for x in cookedBlastL if x.qseqidS.split()[0].replace('lcl|','') == CurrentNameS]
+		SubcookedBlastL = [x for x in cookedBlastL if x.qseqidS.split()[0].replace('lcl|','') == CurrentNameS and x.sseqidS.split()[0].replace('lcl|','') not in GlobalExcludeL]
+		SingleSubcookedBlastL = sorted(SubcookedBlastL, key=lambda x:x.bitscoreF)[::-1] ##remove redundant of subjects.
+		SingleSubcookedBlastL_nameL = [] 	##remove redundant of subjects.
+		LonlySubcookedBlastL = [] 		##remove redundant of subjects.
+		for i in SingleSubcookedBlastL: 	##remove redundant of subjects.
+			if i.sseqidS not in SingleSubcookedBlastL_nameL: 	##remove redundant of subjects.
+				LonlySubcookedBlastL.append(i) 		##remove redundant of subjects.
+				SingleSubcookedBlastL_nameL.append(i.sseqidS)##remove redundant of subjects.
+		
 		#STDERR("SubcookedBlastL=",SubcookedBlastL) ##DEBUG
-		selectedSeqSL = main1(CurrentNameS,SubcookedBlastL) ## Get Sequnces to create consensus and remove the member from ContigNamelistL
+		selectedSeqSL = main1(CurrentNameS,LonlySubcookedBlastL) ## Get Sequnces to create consensus and remove the member from ContigNamelistL
 		PickedOBJL = [FastaTool(x) for x in selectedSeqSL] ## Transform each SeqS into Fasta object
 		#STDERR("selectedSeqS=",selectedSeqS)
 		if len(selectedSeqSL) == 1:
@@ -464,7 +479,9 @@ def main0(INS):
 		ExcludeNameL = [x.name() for x in PickedOBJL] ## Get Name For Excluding
 		STDERR("main0.ExcludeNameL=",ExcludeNameL) ##DEBUG
 
-		ContigNamelistL = [x for x in ContigNamelistL if x not in ExcludeNameL]
+		GlobalExcludeL = GlobalExcludeL + ExcludeNameL ## Append Used contigs in GlobalExcludeL
+		ContigNamelistL = [x for x in ContigNamelistL if x not in GlobalExcludeL] ##Update remains contigs in ContigNamelistL
+		
 		STDERR("######## len(ContigNamelistL)=",len(ContigNamelistL)) ##DEBUG
 		
 		MemberS = ";".join(ExcludeNameL)
