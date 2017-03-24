@@ -370,7 +370,7 @@ def HitJoin(seedOBJ,neighborL): ## join blast hit if they are overlap with each 
 	else:
 		direction = 1 ## 3' --> 5'
 	if direction == 1:
-		headJoinL = [x for x in neighborL if x.sstartI > seedOBJ.sstartI and x.sstartI < seedOBJ.sstartI  ]
+		headJoinL = [x for x in neighborL if x.sstartI > seedOBJ.sstartI and x.sstartI < seedOBJ.sstartI ]
 	return None
 
 def PreAlign(SubClusterL):
@@ -409,25 +409,49 @@ def main(SubcookedBlastL): ##Take input as PROCESSED blast(n,x) results LIST
 		STDERR("kickNameL=",AlignImproveL[3])
 		return AlignImproveL
 
+def MatchCheck(hitOBJ, *args):
+	H = hitOBJ
+	if len(args) == 1:
+		MissingEndI = args[0]
+	else:
+		MissingEndI = 0
+	
+	flagI = 0
+
+	if (H.qstartI < H.qendI and H.sstartI > (1 + MissingEndI) and H.sendI > (H.slenI - MissingEndI)  and H.qstartI <= (1 + MissingEndI) and H.qendI < H.qlenI - MissingEndI ): flagI = 4 ## 5' of query overlaps 3' of subject 
+	elif (H.sstartI < H.sendI and H.sstartI < (1 + MissingEndI) and H.sendI > (H.slenI - MissingEndI)  and H.qstartI <= (1 + MissingEndI) and H.qendI < H.qlenI - MissingEndI ): flagI = 5 ## 5' of query overlaps 5' of subject 
+	elif H.sstartI < H.sendI and H.sstartI <= (1 + MissingEndI) and H.sendI < (H.slenI - MissingEndI) : flagI = 4 ## 5' of subject overlaps with 3' of query 
+	elif H.sstartI < H.sendI and H.sstartI <= (1 + MissingEndI) and H.sendI >= (H.slenI - MissingEndI): flagI = 1 ## subject is subtring of query
+	elif H.sstartI > H.sendI and H.sstartI >= (H.slenI - MissingEndI) and H.sendI <= (1 + MissingEndI): flagI = -1 ## subject is subtring of query in reverse complement direction
+	
+	elif H.qstartI < H.qendI and H.qstartI <= (1 + MissingEndI) and H.qendI >= (H.qlenI - MissingEndI): flagI = 2 ## query is subtring of subject
+	elif H.qstartI > H.qendI and H.qstartI >= ( H.qlenI - MissingEndI) and H.qendI <= (1 + MissingEndI): flagI = -2 ## query is subtring of subject in reverse complement direction
+
+	
+	
+
 def main1(CurrentNameS,SubcookedBlastL): ## Direct Checking Matched sequence by Performing Alignment
 	ClusteredL = merge4(SubcookedBlastL,0.05)
-	STDERR("main1.CurrentNameS",CurrentNameS)
-	STDERR("main1.ClusteredL=",[[x.sseqidS for x in y ] for y in ClusteredL])
+	STDERR("main1.CurrentNameS",CurrentNameS) ##DEBUG
+	STDERR("main1.ClusteredL=",[[x.sseqidS for x in y ] for y in ClusteredL]) ##DEBUG
 	SelectedClustL = []
 	for i in ClusteredL:
 		if len([x.sseqidS.find(CurrentNameS) != -1 for x in i ]) > 0:
 			SelectedClustL.append(i) 
-	
 		
-	SeqSL = [">" + x for x in PreAlign(SelectedClustL[0]).split(">") if len(x) > 3]
-	#STDERR("main1.SeqSL=",SeqSL)
-	CurrentSeqS = [x for x in SeqSL if x.find(CurrentNameS+" ") != -1][0]
-	CompareSeqSL = [x for x in SeqSL if x.find(CurrentNameS+" ") == -1]
-	PickedL = SimilarPick(CurrentSeqS,CompareSeqSL,0)
+	STDERR("main1.SelectedClustL",SelectedClustL) ##DEBUG
+	PerfectMatchL = [x for x in SelectedClustL[0] if x.mismatchI == 0 and x.gapopenI == 0 and ] ## select perfect match from a hit objects list
+	NotPerfectMatchL [x for x in SelectedClustL[0] if x not in PerfectMatchL]  ## select non-perfect match hit to test by alignment product
+	PerfectMatchS = [">" + x for x in PreAlign(PerfectMatchL).split(">") if len(x) > 3] ## retrieve sequences of perfect match 
+	
+	SeqSL = [">" + x for x in PreAlign(NotPerfectMatchL).split(">") if len(x) > 3] ## for those non-perfect match sequences will be test 
+	#STDERR("main1.SeqSL=",SeqSL) ##DEBUG
+	CurrentSeqS = [x for x in SeqSL if x.find(CurrentNameS+" ") != -1][0] ## Target seq used as anchor
+	CompareSeqSL = [x for x in SeqSL if x.find(CurrentNameS+" ") == -1] ## Seqs to compare by alignment 
+	PickedL = SimilarPick(CurrentSeqS,CompareSeqSL,0) ## Test Seqs by performing alignment
 
 	return PickedL ## [TargetSeqS, PickedSeqS1st, .... , PickedSeqSNth]
 	
-
 
 def main0(INS):
 	#cookedBlastL = sorted([hit(x) for x in chop(INS)], key=lambda x: x.qlenI )[::-1]
@@ -435,7 +459,7 @@ def main0(INS):
 	STDERR("len(cookedBlastL)=",len(cookedBlastL))
 	STDERR("cookedBlastL[:5]=",cookedBlastL[:5])
 	ContigNamelistL = [''] ## First element is used to compare next element which will be add
-	GlobalExcludeL = []
+	GlobalExcludeL = [] ## Create a list for used sequences names
 	for i in cookedBlastL:
 		TMPnameS = i.qseqidS.split()[0].split('|')[1]
 		if TMPnameS != ContigNamelistL[-1] and TMPnameS not in ContigNamelistL:
