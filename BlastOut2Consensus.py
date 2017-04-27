@@ -53,18 +53,18 @@ def merge4(Ori_inputlistOBJ,coverage):
 		
 		## <------------------->
 		##    <------------->
-		temp = [x for x in a if min(x.qstartI,x.qendI) >= Mhead and max(x.qendI, x.qstartI) <= Mtail] #and abs(x.sendI - x.sstartI) > (coverage* Mlength)]
+		temp = [x for x in a if min(x.qstartI,x.qendI) >= Mhead and max(x.qendI, x.qstartI) <= Mtail and abs(x.sendI - x.sstartI) > (coverage* Mlength)]
 
 		##    <------------------->
 		## <------------------>
-		temp2 = [x for x in a if max(x.qendI, x.qstartI) <= Mtail and max(x.qendI, x.qstartI) >= Mhead] #and (Mhead - min(x.sstartI,x.sendI)) <= coverage*(abs(x.sendI - x.sstartI))] 
+		temp2 = [x for x in a if max(x.qendI, x.qstartI) <= Mtail and max(x.qendI, x.qstartI) >= Mhead and (Mhead - min(x.sstartI,x.sendI)) <= coverage*(abs(x.sendI - x.sstartI))] 
 		temp2 = [x for x in temp2 if x not in temp]
 
 		temp = temp + temp2
 		
 		## <------------------->
 		##     <------------------>		
-		temp2 = [x for x in a if min(x.qendI, x.qstartI) >= Mhead and min(x.qendI, x.qstartI) >= Mtail ] #and (max(x.sendI, x.sstartI) - Mtail) <= coverage*(abs(x.sendI - x.sstartI))]
+		temp2 = [x for x in a if min(x.qendI, x.qstartI) >= Mhead and min(x.qendI, x.qstartI) >= Mtail  and (max(x.sendI, x.sstartI) - Mtail) <= coverage*(abs(x.sendI - x.sstartI))]
 		temp2 = [x for x in temp2 if x not in temp]
 
 		temp = temp + temp2
@@ -85,19 +85,23 @@ def getSseq4(DBname,Scontigname,Shead,Stail):
 	arg1 = "blastdbcmd -db "+DBname+" -entry \""+Scontigname+"\" -range "+str(Shead)+"-"+str(Stail)+" ;"
 	#arg2 = "fastacmd -p F -S 2 -d "+DBname+" -s \""+Scontigname+"\" -L "+str(Stail)+","+str(Shead)+" ;"
 	arg2 = "blastdbcmd -strand minus -db "+DBname+" -entry \""+Scontigname+"\" -range "+str(Shead)+"-"+str(Stail)+" ;"
-		
-	if int(Shead) < int(Stail):		
+	if int(Shead) == 0 and int(Stail) == 0: ## To Get Empty sequence and to avoid blastdbcmd error 
+		TEMPseqs = ">lcl|Empty_Seq"
+	
+	elif int(Shead) < int(Stail):		
 		arg = arg1
 			
 	elif int(Shead) > int(Stail):
 		arg = arg2
 
-	process = subprocess.Popen(arg, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-	x = process.communicate()
+	if int(Shead) != 0 and int(Stail) != 0: 
+		process = subprocess.Popen(arg, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+		x = process.communicate()
 	
-	TEMPseqs = x[0]
+		TEMPseqs = x[0]
 	#sys.stderr.write(str(x[1])) ##DEBUG
-	del process
+		del process
+
 	return	TEMPseqs
 
 def getSeqFull(DBname,Scontigname):
@@ -202,7 +206,7 @@ def musclecallCLW(SeqS):
 		x = '0'
 	return x
 
-def AlignCheck(MSAfasta):
+def AlignCheck(MSAfasta): ##unused function
 	SeqsL = MSAfasta.split('>') ## Take input aligment as fasta format
 	SeqsL = ['>' + x for x in SeqsL if len(x) > 0] ##Eliminate empty items
 	SeqsL = [FastaTool(x) for x in SeqsL] ## Create fasta object for each sequences
@@ -244,7 +248,7 @@ def MSAfastaSplit(MSAfasta):
 	MSAfastaL = [[x.splitlines()[0],''.join(x.splitlines()[1:])] for x in MSAfastaL] ## Separate each sequences
 	return MSAfastaL ##Return 2D List [[NameS,seqS],[NameS,seqS]]
 
-def UglyKicker(scoredL):
+def UglyKicker(scoredL): ##UNUSED
 	EvrGapF = float(sum( [ x[5] for x in scoredL]))/float(len(scoredL))
 	EvrInnerGapF = float(sum( [ x[4] for x in scoredL]))/float(len(scoredL))
 	ExcludeSeqNameS = sorted(scoredL, key = lambda x:(abs(float(x[5]) - EvrGapF) + abs(float(x[4]) - EvrGapF)) )[-1][0][0].split()[0] ##get name of gap-prone sequence 
@@ -259,7 +263,7 @@ def SimilarPick(TargetSeqS,RelatedSeqSL,InnerGapLimitI): ## Aling Each match Seq
 		MSAfastaS =  musclecall(ToALignS)
 		#STDERR("SimilarPick.MSAfastaSplit(MSAfastaS)=",MSAfastaSplit(MSAfastaS))
 		MSAfastaL = [x for x in MSAfastaSplit(MSAfastaS) if x[0].find(TagetSeqNameS) == -1]
-		#STDERR("SimilarPick.MSAfastaL=",MSAfastaL)
+		STDERR("SimilarPick.MSAfastaL=",MSAfastaL)
 		scoredL = AlignScore(MSAfastaL)
 		for each in scoredL: 
 			if each[5] <= InnerGapLimitI:
@@ -364,13 +368,13 @@ def consensusExtractKW(MSAfasta,GapWeightF,MinPF,GapIgnoreFlagI): ##MinPF = mini
 
 	return Consout
 
-def HitJoin(seedOBJ,neighborL): ## join blast hit if they are overlap with each other 
+def HitJoin(seedOBJ,neighborL,MissmatchSpaceI): ## join blast hit if they are overlap with each other 
 	if seedOBJ.sstartI < seedOBJ.sendI or seedOBJ.qstartI < seedOBJ.qendI:
 		direction = 0 ## 5' --> 3'
 	else:
 		direction = 1 ## 3' --> 5'
 	if direction == 1:
-		headJoinL = [x for x in neighborL if x.sstartI > seedOBJ.sstartI and x.sstartI < seedOBJ.sstartI ]
+		headJoinL = [x for x in neighborL if x.sseqidI == seedOBJ.sseqidI]
 	return None
 
 def PreAlign(SubClusterL):
@@ -409,29 +413,147 @@ def main(SubcookedBlastL): ##Take input as PROCESSED blast(n,x) results LIST
 		STDERR("kickNameL=",AlignImproveL[3])
 		return AlignImproveL
 
-def MatchCheck(hitOBJ, *args):
+
+def ExtendpartFinder(hitOBJ): ## define extend part of a blast hit. Take blast hit object then return list of extend  parts at both end
+	HeadExtendL = [] 
+	TailExtendL = []	
+	SubjectNameS = hitOBJ.sseqidS
+	MatchTypeL = MatchType(hitOBJ,3)
+	STDERR("ExtendpartFinder.MatchTypeL=",MatchTypeL) ##DEBUG
+	if  MatchTypeL[3] == 0: ## Subject is shorter than query. Then there is no extend part for the hit
+		HeadExtendL = [SubjectNameS, 0, 0]  
+		TailExtendL = [SubjectNameS, 0, 0]
+		
+	elif MatchTypeL[2] == 0 and MatchTypeL[3] == 1: 
+		if MatchTypeL[1] == 0:	
+			Head_StartPositionI = 1; Head_EndPositionI = (hitOBJ.sstartI - 1)           ## __--->___ Query
+			Tail_StartPositionI = (hitOBJ.sendI + 1); Tail_EndPositionI = hitOBJ.slenI  ## --------> Subject
+		else:
+			Head_StartPositionI = hitOBJ.slenI; Head_EndPositionI = (hitOBJ.sstartI + 1) ## __--->___ Query
+			Tail_StartPositionI = (hitOBJ.sendI - 1); Tail_EndPositionI = 1              ## <-------- Subject
+
+		HeadExtendL = [SubjectNameS, Head_StartPositionI, Head_EndPositionI]  
+		TailExtendL = [SubjectNameS, Tail_StartPositionI, Tail_EndPositionI]
+
+	elif  MatchTypeL[2] == 1 and MatchTypeL[3] == 1: 
+		if MatchTypeL[1] == 0:
+			if MatchTypeL[4:8] == [0,1,1,0]:
+				Head_StartPositionI = 1; Head_EndPositionI = (hitOBJ.sstartI - 1) #Q __---->
+				Tail_StartPositionI = 0; Tail_EndPositionI = 0                    #S ---->__
+
+			elif MatchTypeL[4:8] == [1,0,0,1]:
+				Head_StartPositionI = 0; Head_EndPositionI = 0                             #Q ---->__ 
+				Tail_StartPositionI = (hitOBJ.sendI + 1); Tail_EndPositionI = hitOBJ.slenI #S __---->
+
+		elif MatchTypeL[1] == 1:
+			if MatchTypeL[4:8] == [0,0,1,1]:
+				Head_StartPositionI = hitOBJ.slenI; Head_EndPositionI = (hitOBJ.sstartI + 1) #Q __---->
+				Tail_StartPositionI = 0; Tail_EndPositionI = 0                               #S <----__
+
+			elif MatchTypeL[4:8] == [1,1,0,0]:
+				Head_StartPositionI = 0; Head_EndPositionI = 0                       #Q ---->__ 
+				Tail_StartPositionI = (hitOBJ.sendI - 1); Tail_EndPositionI = 1      #S __<----
+
+		HeadExtendL = [SubjectNameS, Head_StartPositionI, Head_EndPositionI]  
+		TailExtendL = [SubjectNameS, Tail_StartPositionI, Tail_EndPositionI]
+
+	else:
+		HeadExtendL = [SubjectNameS, 0, 0]  
+		TailExtendL = [SubjectNameS, 0, 0]
+		
+	if MatchTypeL[0] == 0:
+		ExtendL = [HeadExtendL, TailExtendL]
+	else:
+		ExtendL = [TailExtendL, HeadExtendL]
+	#                          Head                                                 Tail
+	return ExtendL #[[SubjectNameS,StartPositionI,EndPosition], [SubjectNameS,StartPositionI,EndPosition]]
+
+def TrickyMSA(hitOBJL,TargetNameS): ##Align only parts those extend from longest sequence
+	## Defind conserved part and extended part
+	## Get sequences outside conserved part then perform MSA
+	## Join two part together
+	STDERR("TrickyMSA.hitOBJL=",hitOBJL) ##DEBUG
+
+	HeadL = []
+	TailL = []
+	for hit in hitOBJL:
+		TEMPL = ExtendpartFinder(hit)
+		HeadL.append(TEMPL[0])
+		TailL.append(TEMPL[1])
+
+	ExtendpartFinderL = [HeadL, TailL]
+	STDERR("TrickyMSA.ExtendpartFinderL=",ExtendpartFinderL) ##DEBUG
+
+	HeadToAlignS = ''
+	for i in ExtendpartFinderL[0]:
+		if i[1] != 0 and i[1] != 0:
+			CurrentSeqS = getSseq4(DBname,i[0].split()[0].replace('lcl|',''),i[1],i[2]) #getSseq4(DBname,Scontigname,Shead,Stail)
+			HeadToAlignS = HeadToAlignS + CurrentSeqS
+		
+
+	TailToAlignS = ''
+	for i in ExtendpartFinderL[1]:
+		if i[1] != 0 and i[2] != 0:
+			STDERR("TrickyMSA.ExtendpartFinderL[1].i",i) ##DEBUG
+			CurrentSeqS = getSseq4(DBname,i[0].split()[0].replace('lcl|',''),i[1],i[2]) #getSseq4(DBname,Scontigname,Shead,Stail)
+			TailToAlignS = TailToAlignS + CurrentSeqS
+
+	STDERR("TrickyMSA.HeadToAlignS=",HeadToAlignS) ##DEBUG
+	HeadConsensusS = ''
+	if HeadToAlignS != '':	
+		HeadAlignmentS = musclecall(HeadToAlignS)
+		STDERR("TrickyMSA.HeadAlignmentS=",musclecallCLW(HeadToAlignS)) ##DEBUG
+		HeadConsensusS = ">"+ "HeadS" + " ConS\n" + consensusExtractKW(HeadAlignmentS,0,0.01,1) + "\n"
+
+	STDERR("TrickyMSA.TailToAlignS=",TailToAlignS) ##DEBUG
+	TailConsensusS = ''
+	if TailToAlignS != '':	
+		TailAlignmentS = musclecall(TailToAlignS)
+		STDERR("TrickyMSA.TailAlignmentS=",musclecallCLW(TailToAlignS)) ##DEBUG
+		TailConsensusS = ">"+ "TailS" + " ConS\n" + consensusExtractKW(TailAlignmentS,0,0.01,1) + "\n"
+
+
+	MiddleSeqs = getSeqFull(DBname,TargetNameS)    
+	seqSL = [FastaTool(x).seqonly() for x in [HeadConsensusS,MiddleSeqs,TailConsensusS] if x != '']
+	for i in seqSL: ##DEBUG
+		STDERR("i in seqSL",i)##DEBUG
+	LongerSeqS =  ">"+TargetNameS+"Extended\n"+''.join(seqSL)
+	return LongerSeqS
+
+### UNUSED FUNCTION ####
+
+
+def MatchType(hitOBJ, *args):
 	H = hitOBJ
 	if len(args) == 1:
 		MissingEndI = args[0]
 	else:
 		MissingEndI = 0
+	flagL = [1,1,1,1,1,1,1,1,1,1]
 	
-	flagI = 0
+	##p=plus m=minus 0=FullMatch 1=PartialMatch h=head t=tail n=null
+	# 00000000   00101010   00010000   00110110   00111001
+	#Q ------> #Q ------> #Q __-->__ #Q __----> #Q ---->__ 
+	#S ------> #S __-->__ #S ------> #S ---->__ #S __---->
+	##############################################################
+	# 01000000   01101010   01010000   01110011   01111100
+	#Q ------> #Q ------> #Q __-->__ #Q __----> #Q ---->__ 
+	#S <------ #S __<--__ #S <------ #S <----__ #S __<----
 
-	if (H.qstartI < H.qendI and H.sstartI > (1 + MissingEndI) and H.sendI > (H.slenI - MissingEndI)  and H.qstartI <= (1 + MissingEndI) and H.qendI < H.qlenI - MissingEndI ): flagI = 4 ## 5' of query overlaps 3' of subject 
-	elif (H.sstartI < H.sendI and H.sstartI < (1 + MissingEndI) and H.sendI > (H.slenI - MissingEndI)  and H.qstartI <= (1 + MissingEndI) and H.qendI < H.qlenI - MissingEndI ): flagI = 5 ## 5' of query overlaps 5' of subject 
-	elif H.sstartI < H.sendI and H.sstartI <= (1 + MissingEndI) and H.sendI < (H.slenI - MissingEndI) : flagI = 4 ## 5' of subject overlaps with 3' of query 
-	elif H.sstartI < H.sendI and H.sstartI <= (1 + MissingEndI) and H.sendI >= (H.slenI - MissingEndI): flagI = 1 ## subject is subtring of query
-	elif H.sstartI > H.sendI and H.sstartI >= (H.slenI - MissingEndI) and H.sendI <= (1 + MissingEndI): flagI = -1 ## subject is subtring of query in reverse complement direction
-	
-	elif H.qstartI < H.qendI and H.qstartI <= (1 + MissingEndI) and H.qendI >= (H.qlenI - MissingEndI): flagI = 2 ## query is subtring of subject
-	elif H.qstartI > H.qendI and H.qstartI >= ( H.qlenI - MissingEndI) and H.qendI <= (1 + MissingEndI): flagI = -2 ## query is subtring of subject in reverse complement direction
-
-	
-	
+	if H.qstartI < H.qendI : flagL[0] = 0 #Check Query Direction
+	if H.sstartI < H.sendI : flagL[1] = 0 #Check Subject Direction
+	if H.lengthI >= (H.qlenI - MissingEndI) : flagL[2] = 0 #Check Query Fully Match or not
+	if H.lengthI >= (H.slenI - MissingEndI) : flagL[3] = 0 #Check Subject Fully Match or not
+	if min(H.qstartI,H.qendI) <= MissingEndI : flagL[4] = 0 #Check Query Head Match Point
+	if min(H.sstartI,H.sendI) <= MissingEndI : flagL[5] = 0 #Check Subject Head Match Point
+	if max(H.qstartI,H.qendI) >= (H.qlenI - MissingEndI) : flagL[6] = 0 #Check Query Tail Match Point 
+	if max(H.sstartI,H.sendI) >= (H.slenI - MissingEndI) : flagL[7] = 0 #Check Subject Tail Match Point
+	if sum(flagL[2:4]) == 2 and flagL[0:2] + flagL[4:8] in ([0,0,1,0,0,1],[0,0,0,1,1,0],[0,1,1,1,0,0],[0,1,0,0,1,1],[1,0,0,0,1,1],[1,0,1,1,0,0],[1,1,0,1,1,0],[1,1,1,0,0,1]):flagL[8] = 0 #Check Overhang Perfect Match
+	if flagL[0:4] in ([0,0,0,0], [0,1,0,0], [0,0,1,0], [0,1,1,0], [0,0,0,1], [0,1,0,1]):flagL[9] = 0
+	return flagL
 
 def main1(CurrentNameS,SubcookedBlastL): ## Direct Checking Matched sequence by Performing Alignment
-	ClusteredL = merge4(SubcookedBlastL,0.05)
+	ClusteredL = merge4(SubcookedBlastL,0.8) ## merge4 group blasthit by match position on query seq
 	STDERR("main1.CurrentNameS",CurrentNameS) ##DEBUG
 	STDERR("main1.ClusteredL=",[[x.sseqidS for x in y ] for y in ClusteredL]) ##DEBUG
 	SelectedClustL = []
@@ -440,17 +562,38 @@ def main1(CurrentNameS,SubcookedBlastL): ## Direct Checking Matched sequence by 
 			SelectedClustL.append(i) 
 		
 	STDERR("main1.SelectedClustL",SelectedClustL) ##DEBUG
-	PerfectMatchL = [x for x in SelectedClustL[0] if x.mismatchI == 0 and x.gapopenI == 0 and ] ## select perfect match from a hit objects list
-	NotPerfectMatchL [x for x in SelectedClustL[0] if x not in PerfectMatchL]  ## select non-perfect match hit to test by alignment product
-	PerfectMatchS = [">" + x for x in PreAlign(PerfectMatchL).split(">") if len(x) > 3] ## retrieve sequences of perfect match 
-	
-	SeqSL = [">" + x for x in PreAlign(NotPerfectMatchL).split(">") if len(x) > 3] ## for those non-perfect match sequences will be test 
-	#STDERR("main1.SeqSL=",SeqSL) ##DEBUG
-	CurrentSeqS = [x for x in SeqSL if x.find(CurrentNameS+" ") != -1][0] ## Target seq used as anchor
-	CompareSeqSL = [x for x in SeqSL if x.find(CurrentNameS+" ") == -1] ## Seqs to compare by alignment 
-	PickedL = SimilarPick(CurrentSeqS,CompareSeqSL,0) ## Test Seqs by performing alignment
+	#THIS PART IS TO AVOID ALIGNING PERFECT MATCH SEQUENCES AND LONG VS LONG SEQUENCES
+	#IF IT IS PERFECT MATCH THEN TAG THEM WITH A PerfectTAG
+	#IF IT IS Partial partial-perfectmatch then align non-match region 
+	#IF IT IS Not Perfect MATCH THEN Exclude it
 
-	return PickedL ## [TargetSeqS, PickedSeqS1st, .... , PickedSeqSNth]
+	##PerfectMatchL = [x for x in SelectedClustL[0] if x.mismatchI == 0 and x.gapopenI == 0] ## select perfect match from a hit objects list
+	PerfectMatchL = [x for x in SelectedClustL[0] if x.mismatchI == 0 and x.gapopenI == 0 and MatchType(x,3)[9] == 0 ] ## select perfect match from a hit objects list
+	#PerfectMatchL = [] ##Tempolary Disable
+	RelaxENDI = 3 #set relax end integer
+	OverhangPerfectMatchL = [x for x in SelectedClustL[0] if x not in PerfectMatchL and x.mismatchI == 0 and x.gapopenI == 0 and  MatchType(x,3)[8] == 0 ] ## select Overhangperfect match from a hit objects list
+	OverhangPerfectMatchSL = [">" + x for x in PreAlign(OverhangPerfectMatchL).split(">") if len(x) > 3] ## retrieve sequences of perfect match 
+	
+	STDERR("main1.PerfectMatchL",[[x.AttributesL, MatchType(x,3)] for x in PerfectMatchL]) ##DEBUG
+	STDERR("main1.OverhangPerfectMatchL",[[x.AttributesL, MatchType(x,3)] for x in OverhangPerfectMatchL]) ##DEBUG
+	
+	NotPerfectMatchL = [x for x in SelectedClustL[0] if x not in PerfectMatchL and x not in OverhangPerfectMatchL]  ## select non-perfect match hit to test by alignment product
+	PerfectMatchSL = [">" + x for x in PreAlign(PerfectMatchL).split(">") if len(x) > 3] ## retrieve sequences of perfect match 
+	STDERR("main1.NotPerfectMatchL",[[x.AttributesL, MatchType(x,3)] for x in NotPerfectMatchL]) ##DEBUG
+	PickedL = []
+	if 0 > 1 and len(NotPerfectMatchL) > 0: ##Tempolary Disable by " 0 > 1 "
+		SeqSL = [">" + x for x in PreAlign(NotPerfectMatchL).split(">") if len(x) > 3] ## for those non-perfect match sequences will be test 
+		#STDERR("main1.SeqSL=",SeqSL) ##DEBUG
+		CurrentSeqS = [x for x in SeqSL if x.find(CurrentNameS+" ") != -1][0] ## Target seq used as anchor
+		CompareSeqSL = [x for x in SeqSL if x.find(CurrentNameS+" ") == -1] ## Seqs to compare by alignment 
+		PickedL = SimilarPick(CurrentSeqS,CompareSeqSL,0) ## Test Seqs by performing alignment
+
+	PickedL = PickedL + OverhangPerfectMatchSL + PerfectMatchSL  
+
+	TrickyMSAS = TrickyMSA(OverhangPerfectMatchL,CurrentNameS)
+
+	#return PickedL ## [TargetSeqS, PickedSeqS1st, .... , PickedSeqSNth]
+	return TrickyMSAS
 	
 
 def main0(INS):
@@ -491,13 +634,17 @@ def main0(INS):
 				SingleSubcookedBlastL_nameL.append(i.sseqidS)##remove redundant of subjects.
 		
 		#STDERR("SubcookedBlastL=",SubcookedBlastL) ##DEBUG
-		selectedSeqSL = main1(CurrentNameS,LonlySubcookedBlastL) ## Get Sequnces to create consensus and remove the member from ContigNamelistL
+		#selectedSeqSL = main1(CurrentNameS,LonlySubcookedBlastL) ## Get Sequnces to create consensus and remove the member from ContigNamelistL
+		ExtendedSeqS = main1(CurrentNameS,LonlySubcookedBlastL) ## Get ExtendedSeqS
+		STDERR("main0.ExtendedSeqS",ExtendedSeqS) ##DEBUG
+		
 		PickedOBJL = [FastaTool(x) for x in selectedSeqSL] ## Transform each SeqS into Fasta object
 		#STDERR("selectedSeqS=",selectedSeqS)
 		if len(selectedSeqSL) == 1:
 			consensusS = selectedSeqSL[0]
 		elif selectedSeqSL > 1:
 			FastaAlignmentS = musclecall('\n'.join(selectedSeqSL))
+			STDERR("main0.FastaAlignmentS=",musclecallCLW('\n'.join(selectedSeqSL)))
 			consensusS = ">"+ CurrentNameS + " ConS\n" + consensusExtractKW(FastaAlignmentS,0,0.01,1) + "\n"
 		STDERR("main0.consensusS=",consensusS) ##DEBUG
 		ExcludeNameL = [x.name() for x in PickedOBJL] ## Get Name For Excluding
