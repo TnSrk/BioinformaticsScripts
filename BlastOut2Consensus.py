@@ -248,6 +248,13 @@ def MSAfastaSplit(MSAfasta):
 	MSAfastaL = [[x.splitlines()[0],''.join(x.splitlines()[1:])] for x in MSAfastaL] ## Separate each sequences
 	return MSAfastaL ##Return 2D List [[NameS,seqS],[NameS,seqS]]
 
+def MSACheck(MSAS): #Check consistency of MSA 
+	MSAfastaL = [x for x in MSAfastaSplit(MSAS)]
+	scoredL = AlignScore(MSAfastaL)
+	STDERR("MSACheck.scoredL=",scoredL)
+	return scoredL
+	
+
 def UglyKicker(scoredL): ##UNUSED
 	EvrGapF = float(sum( [ x[5] for x in scoredL]))/float(len(scoredL))
 	EvrInnerGapF = float(sum( [ x[4] for x in scoredL]))/float(len(scoredL))
@@ -515,8 +522,8 @@ def TrickyMSA(hitOBJL,TargetNameS): ##Align only parts those extend from longest
 
 	MiddleSeqs = getSeqFull(DBname,TargetNameS)    
 	seqSL = [FastaTool(x).seqonly() for x in [HeadConsensusS,MiddleSeqs,TailConsensusS] if x != '']
-	for i in seqSL: ##DEBUG
-		STDERR("i in seqSL",i)##DEBUG
+	#for i in seqSL: ##DEBUG
+	#	STDERR("i in seqSL",i)##DEBUG
 	LongerSeqS =  ">"+TargetNameS+"Extended\n"+''.join(seqSL)
 	return LongerSeqS
 
@@ -572,7 +579,7 @@ def main1(CurrentNameS,SubcookedBlastL): ## Direct Checking Matched sequence by 
 	#PerfectMatchL = [] ##Tempolary Disable
 	RelaxENDI = 3 #set relax end integer
 	OverhangPerfectMatchL = [x for x in SelectedClustL[0] if x not in PerfectMatchL and x.mismatchI == 0 and x.gapopenI == 0 and  MatchType(x,3)[8] == 0 ] ## select Overhangperfect match from a hit objects list
-	OverhangPerfectMatchSL = [">" + x for x in PreAlign(OverhangPerfectMatchL).split(">") if len(x) > 3] ## retrieve sequences of perfect match 
+	#OverhangPerfectMatchSL = [">" + x for x in PreAlign(OverhangPerfectMatchL).split(">") if len(x) > 3] ## retrieve sequences of perfect match 
 	
 	STDERR("main1.PerfectMatchL",[[x.AttributesL, MatchType(x,3)] for x in PerfectMatchL]) ##DEBUG
 	STDERR("main1.OverhangPerfectMatchL",[[x.AttributesL, MatchType(x,3)] for x in OverhangPerfectMatchL]) ##DEBUG
@@ -588,12 +595,13 @@ def main1(CurrentNameS,SubcookedBlastL): ## Direct Checking Matched sequence by 
 		CompareSeqSL = [x for x in SeqSL if x.find(CurrentNameS+" ") == -1] ## Seqs to compare by alignment 
 		PickedL = SimilarPick(CurrentSeqS,CompareSeqSL,0) ## Test Seqs by performing alignment
 
-	PickedL = PickedL + OverhangPerfectMatchSL + PerfectMatchSL  
+	#PickedL = PickedL + OverhangPerfectMatchSL + PerfectMatchSL  
 
 	TrickyMSAS = TrickyMSA(OverhangPerfectMatchL,CurrentNameS)
+	UsedNameSL = [CurrentNameS] + [x.sseqidS for x in PerfectMatchL] + [x.sseqidS for x in OverhangPerfectMatchL]
 
 	#return PickedL ## [TargetSeqS, PickedSeqS1st, .... , PickedSeqSNth]
-	return TrickyMSAS
+	return [TrickyMSAS,UsedNameSL]
 	
 
 def main0(INS):
@@ -635,19 +643,20 @@ def main0(INS):
 		
 		#STDERR("SubcookedBlastL=",SubcookedBlastL) ##DEBUG
 		#selectedSeqSL = main1(CurrentNameS,LonlySubcookedBlastL) ## Get Sequnces to create consensus and remove the member from ContigNamelistL
-		ExtendedSeqS = main1(CurrentNameS,LonlySubcookedBlastL) ## Get ExtendedSeqS
-		STDERR("main0.ExtendedSeqS",ExtendedSeqS) ##DEBUG
+		ExtendedOutL = main1(CurrentNameS,LonlySubcookedBlastL) ## Get ExtendedSeqS
+		STDERR("main0.ExtendedOutL",ExtendedOutL) ##DEBUG
+		consensusS = ExtendedOutL[0]
 		
-		PickedOBJL = [FastaTool(x) for x in selectedSeqSL] ## Transform each SeqS into Fasta object
+		#PickedOBJL = [FastaTool(x) for x in selectedSeqSL] ## Transform each SeqS into Fasta object
 		#STDERR("selectedSeqS=",selectedSeqS)
-		if len(selectedSeqSL) == 1:
-			consensusS = selectedSeqSL[0]
-		elif selectedSeqSL > 1:
-			FastaAlignmentS = musclecall('\n'.join(selectedSeqSL))
-			STDERR("main0.FastaAlignmentS=",musclecallCLW('\n'.join(selectedSeqSL)))
-			consensusS = ">"+ CurrentNameS + " ConS\n" + consensusExtractKW(FastaAlignmentS,0,0.01,1) + "\n"
+		#if len(selectedSeqSL) == 1:
+		#	consensusS = selectedSeqSL[0]
+		#elif selectedSeqSL > 1:
+		#	FastaAlignmentS = musclecall('\n'.join(selectedSeqSL))
+		#	STDERR("main0.FastaAlignmentS=",musclecallCLW('\n'.join(selectedSeqSL)))
+		#	consensusS = ">"+ CurrentNameS + " ConS\n" + consensusExtractKW(FastaAlignmentS,0,0.01,1) + "\n"
 		STDERR("main0.consensusS=",consensusS) ##DEBUG
-		ExcludeNameL = [x.name() for x in PickedOBJL] ## Get Name For Excluding
+		ExcludeNameL = ExtendedOutL[1] ## Get Name For Excluding
 		STDERR("main0.ExcludeNameL=",ExcludeNameL) ##DEBUG
 
 		GlobalExcludeL = GlobalExcludeL + ExcludeNameL ## Append Used contigs in GlobalExcludeL
