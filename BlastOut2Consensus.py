@@ -16,6 +16,16 @@ def chop(blastxS): #divide each hit into a list of attributes
 		blastxL = [y for y in blastxS.splitlines() if len(y) > 2]		
 	return blastxL
 
+def Mode(ListL):
+	ModeD = {}
+	for i in ListL:
+		if i not in ModeD:
+			modeD[i] = 1
+		else:
+			modeD[i] = modeD[i] + 1
+	
+	return ModeD
+
 class hit(object):
 	def __init__(self,blastxhitS):
 		#self.AttributesL = [[y[0:2] + [float(y[2])] + [int(x) for x in y[3:10]] + [float(x) for x in y[10:12]] + [int(x) for x in y[12:]] for y in blastxhitS.split("\t")] ##split and cast type for each hit
@@ -84,7 +94,7 @@ def getSseq4(DBname,Scontigname,Shead,Stail):
 	#arg1 = "fastacmd -p F -d "+DBname+" -s \""+Scontigname+"\" -L "+str(Shead)+","+str(Stail)+" ;"
 	arg1 = "blastdbcmd -db "+DBname+" -entry \""+Scontigname+"\" -range "+str(Shead)+"-"+str(Stail)+" ;"
 	#arg2 = "fastacmd -p F -S 2 -d "+DBname+" -s \""+Scontigname+"\" -L "+str(Stail)+","+str(Shead)+" ;"
-	arg2 = "blastdbcmd -strand minus -db "+DBname+" -entry \""+Scontigname+"\" -range "+str(Shead)+"-"+str(Stail)+" ;"
+	arg2 = "blastdbcmd -strand minus -db "+DBname+" -entry \""+Scontigname+"\" -range "+str(Stail)+"-"+str(Shead)+" ;"
 	if int(Shead) == 0 and int(Stail) == 0: ## To Get Empty sequence and to avoid blastdbcmd error 
 		TEMPseqs = ">lcl|Empty_Seq"
 	
@@ -101,6 +111,8 @@ def getSseq4(DBname,Scontigname,Shead,Stail):
 		TEMPseqs = x[0]
 	#sys.stderr.write(str(x[1])) ##DEBUG
 		del process
+	else:
+		TEMPseqs = ''
 
 	return	TEMPseqs
 
@@ -227,6 +239,19 @@ def AlignCheck(MSAfasta): ##unused function
 				
 		del SeqsL
 
+def UglyKicker(scoredL, *arg): 
+	if len(args) == 1:
+		GapThresholdI = args[0]
+	else:
+		GapThresholdI = 0
+	EvrGapF = float(sum( [ x[5] for x in scoredL]))/float(len(scoredL))
+	EvrInnerGapF = float(sum( [ x[4] for x in scoredL]))/float(len(scoredL))
+	StatL = [ [x[0][0], x[4] - EvrInnerGapF, x[5] - EvrInnerGapF] for x in scoredL]
+	STDERR("UglyKicker.StatL=", StatL) ##DEBUG
+	ExcludeSeqNameSL = [x for x in StatL if x[1] > GapThresholdI or x[2] > GapThresholdI]
+	STDERR("UglyKicker.ExcludeSeqNameSL=",ExcludeSeqNameSL) ##DEBUG
+	return ExcludeSeqNameSL
+
 def AlignScore(SeqsL):
 
 	scoredL = [] ## Empty list for score storing
@@ -251,16 +276,11 @@ def MSAfastaSplit(MSAfasta):
 def MSACheck(MSAS): #Check consistency of MSA 
 	MSAfastaL = [x for x in MSAfastaSplit(MSAS)]
 	scoredL = AlignScore(MSAfastaL)
-	STDERR("MSACheck.scoredL=",scoredL)
+	STDERR("MSACheck.scoredL",scoredL)
+	#ExcludeSeqNameS = UglyKicker(scoredL)
+	#STDERR("MSACheck.ExcludeSeqNameS",ExcludeSeqNameS)
+	#STDERR("MSACheck.scoredL=",scoredL)
 	return scoredL
-	
-
-def UglyKicker(scoredL): ##UNUSED
-	EvrGapF = float(sum( [ x[5] for x in scoredL]))/float(len(scoredL))
-	EvrInnerGapF = float(sum( [ x[4] for x in scoredL]))/float(len(scoredL))
-	ExcludeSeqNameS = sorted(scoredL, key = lambda x:(abs(float(x[5]) - EvrGapF) + abs(float(x[4]) - EvrGapF)) )[-1][0][0].split()[0] ##get name of gap-prone sequence 
-	ToAlignS = '\n'.join([x[0]+"\n"+x[1].replace('-','') for x in MSAfastaL if x[0].find(ExcludeSeqNameS) == -1])
-	return snatch_scoredL
 
 def SimilarPick(TargetSeqS,RelatedSeqSL,InnerGapLimitI): ## Aling Each match Sequences to target sequences then pick only one with no gap more than threshold
 	TagetSeqNameS = TargetSeqS.splitlines()[0].split()[0]
@@ -477,8 +497,8 @@ def ExtendpartFinder(hitOBJ): ## define extend part of a blast hit. Take blast h
 
 def TrickyMSA(hitOBJL,TargetNameS): ##Align only parts those extend from longest sequence
 	## Defind conserved part and extended part
-	## Get sequences outside conserved part then perform MSA
-	## Join two part together
+	## Get sequences outside conserved part then perform MSA and check consistency
+	## Join two part together if they are aligned perfectly. If not, then discard all 
 	STDERR("TrickyMSA.hitOBJL=",hitOBJL) ##DEBUG
 
 	HeadL = []
@@ -492,40 +512,75 @@ def TrickyMSA(hitOBJL,TargetNameS): ##Align only parts those extend from longest
 	STDERR("TrickyMSA.ExtendpartFinderL=",ExtendpartFinderL) ##DEBUG
 
 	HeadToAlignS = ''
-	for i in ExtendpartFinderL[0]:
-		if i[1] != 0 and i[1] != 0:
-			CurrentSeqS = getSseq4(DBname,i[0].split()[0].replace('lcl|',''),i[1],i[2]) #getSseq4(DBname,Scontigname,Shead,Stail)
-			HeadToAlignS = HeadToAlignS + CurrentSeqS
+	HeadConsensusS = ''
+	HeadNamesL = []
+	if len(ExtendpartFinderL[0]) > 1:
+		for i in ExtendpartFinderL[0]:
+			if i[1] != 0 and i[2] != 0:
+				CurrentNameS = i[0].split()[0].replace('lcl|','')
+				CurrentSeqS = getSseq4(DBname, CurrentNameS, i[1],i[2]) #getSseq4(DBname,Scontigname,Shead,Stail)
+				HeadToAlignS = HeadToAlignS + CurrentSeqS
+				HeadNamesL.append(CurrentNameS)
+		STDERR("TrickyMSA.HeadToAlignS=",HeadToAlignS) ##DEBUG
 		
+		if HeadToAlignS != '':	
+			HeadAlignmentS = musclecall(HeadToAlignS)
+			STDERR("TrickyMSA.HeadAlignmentS=",musclecallCLW(HeadToAlignS)) ##DEBUG
+			MSACheckL = MSACheck(HeadAlignmentS) ##DEBUG
+			STDERR("TrickyMSA.MSACheckL=",MSACheckL) ##DEBUG
+			if sum([x[-1] for x in MSACheckL]) == 0:
+				HeadConsensusS = ">"+ "HeadS" + " ConS\n" + consensusExtractKW(HeadAlignmentS,0,0.01,1) + "\n"
+			else:
+				HeadNamesL = []
+
+	elif len(ExtendpartFinderL[0]) == 1:
+		CurrentL = ExtendpartFinderL[0][0]
+		if CurrentL[1] != 0 and CurrentL[2] != 0:
+			CurrentNameS = CurrentL[0].split()[0].replace('lcl|','')
+			HeadConsensusS = getSseq4(DBname, CurrentNameS, CurrentL[1], CurrentL[2])
+			HeadNamesL = [CurrentNameS]
 
 	TailToAlignS = ''
-	for i in ExtendpartFinderL[1]:
-		if i[1] != 0 and i[2] != 0:
-			STDERR("TrickyMSA.ExtendpartFinderL[1].i",i) ##DEBUG
-			CurrentSeqS = getSseq4(DBname,i[0].split()[0].replace('lcl|',''),i[1],i[2]) #getSseq4(DBname,Scontigname,Shead,Stail)
-			TailToAlignS = TailToAlignS + CurrentSeqS
-
-	STDERR("TrickyMSA.HeadToAlignS=",HeadToAlignS) ##DEBUG
-	HeadConsensusS = ''
-	if HeadToAlignS != '':	
-		HeadAlignmentS = musclecall(HeadToAlignS)
-		STDERR("TrickyMSA.HeadAlignmentS=",musclecallCLW(HeadToAlignS)) ##DEBUG
-		HeadConsensusS = ">"+ "HeadS" + " ConS\n" + consensusExtractKW(HeadAlignmentS,0,0.01,1) + "\n"
-
-	STDERR("TrickyMSA.TailToAlignS=",TailToAlignS) ##DEBUG
 	TailConsensusS = ''
-	if TailToAlignS != '':	
-		TailAlignmentS = musclecall(TailToAlignS)
-		STDERR("TrickyMSA.TailAlignmentS=",musclecallCLW(TailToAlignS)) ##DEBUG
-		TailConsensusS = ">"+ "TailS" + " ConS\n" + consensusExtractKW(TailAlignmentS,0,0.01,1) + "\n"
+	TailNamesL = []
+	if len(ExtendpartFinderL[1]) > 1:
+		for i in ExtendpartFinderL[1]:
+			if i[1] != 0 and i[2] != 0:
+				CurrentNameS = i[0].split()[0].replace('lcl|','')
+				CurrentSeqS = getSseq4(DBname, CurrentNameS, i[1],i[2]) #getSseq4(DBname,Scontigname,STail,Stail)
+				TailToAlignS = TailToAlignS + CurrentSeqS
+				TailNamesL.append(CurrentNameS)
+		STDERR("TrickyMSA.TailToAlignS=",TailToAlignS) ##DEBUG
+		
+		if TailToAlignS != '':	
+			TailAlignmentS = musclecall(TailToAlignS)
+			STDERR("TrickyMSA.TailAlignmentS=",musclecallCLW(TailToAlignS)) ##DEBUG
+			MSACheckL = MSACheck(TailAlignmentS) ##DEBUG
+			STDERR("TrickyMSA.MSACheckL=",MSACheckL) ##DEBUG
+			if sum([x[-1] for x in MSACheckL]) == 0:
+				TailConsensusS = ">"+ "TailS" + " ConS\n" + consensusExtractKW(TailAlignmentS,0,0.01,1) + "\n"
+			else:
+				TailNamesL = []
 
+	elif len(ExtendpartFinderL[1]) == 1:
+		CurrentL = ExtendpartFinderL[1][0]
+		if CurrentL[1] != 0 and CurrentL[2] != 0:
+			CurrentNameS = CurrentL[0].split()[0].replace('lcl|','')
+			TailConsensusS = getSseq4(DBname, CurrentNameS, CurrentL[1], CurrentL[2])
+			TailNamesL = [CurrentNameS]
+			
 
 	MiddleSeqs = getSeqFull(DBname,TargetNameS)    
 	seqSL = [FastaTool(x).seqonly() for x in [HeadConsensusS,MiddleSeqs,TailConsensusS] if x != '']
 	#for i in seqSL: ##DEBUG
 	#	STDERR("i in seqSL",i)##DEBUG
-	LongerSeqS =  ">"+TargetNameS+"Extended\n"+''.join(seqSL)
-	return LongerSeqS
+	HeadTag = '';TailTag = ''
+	if HeadConsensusS != '': HeadTag = "_H"
+	if TailConsensusS != '': TailTag = "_T"
+	if HeadTag == '' and TailTag == '': ExtendedTag = ''
+	else: ExtendedTag = "Extended"
+	LongerSeqS =  ">"+TargetNameS+ExtendedTag+HeadTag+TailTag+"\n"+''.join(seqSL)
+	return [LongerSeqS, HeadNamesL, TailNamesL]
 
 ### UNUSED FUNCTION ####
 
@@ -597,9 +652,11 @@ def main1(CurrentNameS,SubcookedBlastL): ## Direct Checking Matched sequence by 
 
 	#PickedL = PickedL + OverhangPerfectMatchSL + PerfectMatchSL  
 
-	TrickyMSAS = TrickyMSA(OverhangPerfectMatchL,CurrentNameS)
-	UsedNameSL = [CurrentNameS] + [x.sseqidS for x in PerfectMatchL] + [x.sseqidS for x in OverhangPerfectMatchL]
-
+	TrickyMSAL = TrickyMSA(OverhangPerfectMatchL,CurrentNameS)
+	TrickyMSAS = TrickyMSAL[0]
+	STDERR("TrickyMSAL[1] # TrickyMSAL[2]", TrickyMSAL[1], "#" , TrickyMSAL[2]) ##DEBUG
+	UsedNameSL = [CurrentNameS] + [x.sseqidS for x in PerfectMatchL] + TrickyMSAL[1] + TrickyMSAL[2]
+	UsedNameSL = list(set(UsedNameSL))
 	#return PickedL ## [TargetSeqS, PickedSeqS1st, .... , PickedSeqSNth]
 	return [TrickyMSAS,UsedNameSL]
 	
