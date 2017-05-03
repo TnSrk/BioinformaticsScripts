@@ -717,8 +717,9 @@ def main0(INS):
 		STDERR("main0.ExcludeNameL=",ExcludeNameL) ##DEBUG
 
 		GlobalExcludeL = GlobalExcludeL + ExcludeNameL ## Append Used contigs in GlobalExcludeL
-		ContigNamelistL = [x for x in ContigNamelistL if x not in GlobalExcludeL] ##Update remains contigs in ContigNamelistL
-		
+		#ContigNamelistL = [x for x in ContigNamelistL if x not in GlobalExcludeL] ##Update remains contigs in ContigNamelistL
+		ContigNamelistL = [x for x in ContigNamelistL if x not in ExcludeNameL] ##Update remains contigs in ContigNamelistL
+
 		STDERR("######## len(ContigNamelistL)=",len(ContigNamelistL)) ##DEBUG
 		
 		MemberS = ";".join(ExcludeNameL)
