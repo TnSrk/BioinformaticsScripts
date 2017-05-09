@@ -2,11 +2,41 @@
 ##TXblastX.py.py
 ##Takes input from blastx with -outfmt '6 qseqid sseqid pident length mismatch gapopen qstart qend sstart send evalue bitscore slen qlen qcovs' option
 
-import sys,optparse, copy
+import sys,optparse, copy, subprocess
+from concurrent.futures import ProcessPoolExecutor
+from time import sleep
 ### Class And Function
 def STDERR(*StrInS): #Function For Debugging
 	outS = ' '.join([str(x) for x in StrInS])
 	sys.stderr.write(str(outS)+'\n')
+
+def ConcurrentCall(Fnc, InputL, waitI):
+	QueD = {}
+	pool = ProcessPoolExecutor(12)
+	numL = [x for x in range(len(InputL))]
+	OutputL = []
+	for i in numL:
+		QueD["Q"+str(i)] = pool.submit(Fnc,*InputL[i])
+		#STDERR("*InputL[i]=",*InputL[i])
+
+	RoundI = 0
+	while True:# and RoundI < waitI:
+		xQueL =	[QueD["Q"+str(i)].done() for i in numL]
+		STDERR(str(xQueL))
+		if False not in xQueL:
+			#OutputL.append(xQueL)
+			break
+
+		else:
+			
+			sleep(3)
+
+		RoundI += 1
+
+	OutputL = [QueD["Q"+str(i)].result() for i in numL if QueD["Q"+str(i)].done() == True]
+
+	return OutputL
+	
 
 def chop(blastxS): #divide each hit into a list of attributes 
 	if __TAG__ != '0':
@@ -34,7 +64,7 @@ class hit(object):
 		self.bitscoreF = float(self.AttributesL[11])
 		self.slenI = int(self.AttributesL[12])
 		self.qlenI = int(self.AttributesL[13])
-		self.qcovsF = float(self.AttributesL[14])
+		self.qcovsF = float(abs(self.qendI - self.qstartI))
 
 def Pgroup(selectOJBL):
 	nameL = [] ##create empty list to contain contigs names
@@ -165,12 +195,73 @@ def TruncateCheck(AblastResultOBJ,EndNumI): ##filter_out blast hit, math by sub-
 		FlagI = 1
 	return FlagI
 
+def QuerySeq(hitOBJ,__DBname__):
+	QnameS = hitOBJ.qseqidS.replace("lcl|","").split()[0]
+	DBnameS = __DBname__
+	QueryStrandS = "plus"
+	if hitOBJ.qstartI > hitOBJ.qendI:
+			QueryStrandS = "minus"
+	arg = "blastdbcmd -db "+DBnameS+" -strand " + QueryStrandS + " -entry \""+QnameS+"\";"
+	process = subprocess.Popen(arg, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+	x = process.communicate()	
+	TEMPseqs = x[0].strip()
+	#STDERR("TEMPseqs=",TEMPseqs)
+	del process
+	return	TEMPseqs
+
+def musclecallCLW(SeqS):
+	#SeqS = self.SeqS
+	#arg = "muscle -maxiters 32 -gapopen -1200 -quiet"
+	ByteSeq = SeqS.encode('utf-8')
+	#STDERR("musclecallCLW IS RUNNING")
+	arg = "muscle -maxiters 32 -quiet -clw"
+	process = subprocess.Popen(arg, shell=True, stdin=subprocess.PIPE,stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+	x = process.communicate(ByteSeq)[0]
+	#STDERR("musclecallCLW out = ",x)
+	if len(x) == 0:
+		x = '0'.encode('utf-8')
+	#STDERR("musclecallCLW IS RUNNING")
+	return x
+	
+def BlastXHitGroup(HitL,SimilarityF,InnerGapLimitI): ## Aling Each match Sequences to target sequences then pick only one with no gap more than threshold
+	SortedHitL = sorted(HitL, key = lambda x:x.bitscoreF)[::-1] ##sort by hit-bitscore 
+
+	groupedL =  merge4(SortedHitL,0.75)
+
+	TEMPSEQL = []
+	for group in groupedL:
+		inL = [[x ,__DBname__] for x in group]
+		ToALignSL = ConcurrentCall(QuerySeq,inL, 20)
+		TEMPSEQL.append( '\n'.join([ x.decode("utf-8") for x in ToALignSL]) )
+
+
+	#STDERR("TEMPSEQL[0]=",TEMPSEQL[0])
+	#MSA = musclecallCLW(TEMPSEQL[0])
+	#STDERR("MSA=",MSA)
+
+	ConInL = [[x] for x in TEMPSEQL]
+	#STDERR("TEMPSEQL=",TEMPSEQL)
+	MSAL = ConcurrentCall(musclecallCLW,ConInL, 20)
+	#STDERR("MSAL=",MSAL)
+	return MSAL	
+
+
+#		MSAfastaS =  musclecall(ToALignS)
+#		MSAfastaL = [x for x in MSAfastaSplit(MSAfastaS) if x[0].find(TagetSeqNameS) == -1]
+#		STDERR("SimilarPick.MSAfastaL=",MSAfastaL)
+#		scoredL = AlignScore(MSAfastaL)
+#		for each in scoredL: 
+#			if each[5] <= InnerGapLimitI:
+#				PickedL.append(each[0][0]+"\n"+each[0][1].replace("-",""))
+#
+#	return PickedL ## return [TargetSeqS, PickedSeqS1st, .... , PickedSeqSNth]
+
 def main(INS):
 	INL = (chop(INS))
 	hitOBJL = [hit(x) for x in INL]
 	#hitOBJL = [x for x in hitOBJL if TruncateCheck(x,10) == 1] ##remove truncated hit before processing
-	if __TAG__ != '0':
-		selectOJBL = [x for x in hitOBJL if x.qcovsF > __QCovF__ and x.evalueF < __EvalF__]
+	#if __TAG__ != '0':
+	#	selectOJBL = [x for x in hitOBJL if x.qcovsF > __QCovF__ and x.evalueF < __EvalF__]
 	selectOJBL = [x for x in hitOBJL if x.qcovsF > __QCovF__ and x.evalueF < __EvalF__]
 	
 	#selectOJBL = selectOJBL[0:1000] ##DEBUG
@@ -207,6 +298,11 @@ def main2(INS):
 		TXnumS = str(len(ScoreFL[0]))
 		outS = outS + '\n'.join(['\t'.join(x) for x in sortedOBJL]) + "\nPoolCovScpre=\t" + str(ScoreFL[1]) +"\t"+ ScoreFL[0][0][1] + "\tTXnumS=\t"+TXnumS +  "\n############\n"		
 		outS = outS + str(ScoreFL[0]).replace("""],""","""]\n""") + "\n############\n"
+		MSAL = [ x.decode('utf-8') for x in BlastXHitGroup(OBJL,0.98,0) ]
+		STDERR("TEMPSEQ") ##DEBUG
+		STDERR(''.join(MSAL)) ##DEBUG
+		
+	
 	#STDERR(group(selectOJBL)[0])
 	return outS
 
@@ -218,12 +314,14 @@ opt.add_option("-o",help="indicate output file name or print out as standard out
 opt.add_option("-e",help="E-value cutoff for selected hit",default="0.1")
 opt.add_option("-c",help="query-length covery rate cutoff for selected hit",default="0.98")
 opt.add_option("--TAG",help="Spicies Tag in protein name",default="0",dest="TAG")
+opt.add_option("-q",help="*query database path",dest='q',default="DB_PATH")
 (options, args) = opt.parse_args()
 
 ##Documentation part
 __QCovF__ = float(options.c)*100.0 ;STDERR("__QCovF__ = ",__QCovF__)
 __EvalF__ = float(options.e)	;STDERR("__EvalF__ = ",__EvalF__)
 __TAG__ = options.TAG
+__DBname__ = options.q
 
 if options.i == '0': ##get input from pipe
 	INS = sys.stdin.read()
@@ -233,10 +331,10 @@ else:#open file
 	INS = f.read()
 	f.close()
 if options.o == '0': ##print output to pipe
-	print(main(INS))
+	print(main2(INS))
 else:#write output to a flie
 	f=open(options.o,'w')
-	f.write(Main(INS))
+	f.write(Main2(INS))
 	f.close()	
 
 

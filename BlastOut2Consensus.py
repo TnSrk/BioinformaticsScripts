@@ -614,7 +614,8 @@ def MatchType(hitOBJ, *args):
 	if flagL[0:4] in ([0,0,0,0], [0,1,0,0], [0,0,1,0], [0,1,1,0], [0,0,0,1], [0,1,0,1]):flagL[9] = 0
 	return flagL
 
-def main1(CurrentNameS,SubcookedBlastL): ## Direct Checking Matched sequence by Performing Alignment
+def main1(CurrentNameS,SubcookedBlastL,  MismatchAllowI): ## Direct Checking Matched sequence by Performing Alignment
+	
 	ClusteredL = merge4(SubcookedBlastL,0.8) ## merge4 group blasthit by match position on query seq
 	STDERR("main1.CurrentNameS",CurrentNameS) ##DEBUG
 	STDERR("main1.ClusteredL=",[[x.sseqidS for x in y ] for y in ClusteredL]) ##DEBUG
@@ -630,10 +631,10 @@ def main1(CurrentNameS,SubcookedBlastL): ## Direct Checking Matched sequence by 
 	#IF IT IS Not Perfect MATCH THEN Exclude it
 
 	##PerfectMatchL = [x for x in SelectedClustL[0] if x.mismatchI == 0 and x.gapopenI == 0] ## select perfect match from a hit objects list
-	PerfectMatchL = [x for x in SelectedClustL[0] if x.mismatchI == 0 and x.gapopenI == 0 and MatchType(x,3)[9] == 0 ] ## select perfect match from a hit objects list
+	PerfectMatchL = [x for x in SelectedClustL[0] if x.mismatchI <= MismatchAllowI and x.gapopenI == 0 and MatchType(x,3)[9] == 0 ] ## select perfect match from a hit objects list
 	#PerfectMatchL = [] ##Tempolary Disable
 	RelaxENDI = 3 #set relax end integer
-	OverhangPerfectMatchL = [x for x in SelectedClustL[0] if x not in PerfectMatchL and x.mismatchI == 0 and x.gapopenI == 0 and  MatchType(x,3)[8] == 0 ] ## select Overhangperfect match from a hit objects list
+	OverhangPerfectMatchL = [x for x in SelectedClustL[0] if x not in PerfectMatchL and x.mismatchI <= MismatchAllowI and x.gapopenI == 0 and  MatchType(x,3)[8] == 0 ] ## select Overhangperfect match from a hit objects list
 	#OverhangPerfectMatchSL = [">" + x for x in PreAlign(OverhangPerfectMatchL).split(">") if len(x) > 3] ## retrieve sequences of perfect match 
 	
 	STDERR("main1.PerfectMatchL",[[x.AttributesL, MatchType(x,3)] for x in PerfectMatchL]) ##DEBUG
@@ -700,7 +701,7 @@ def main0(INS):
 		
 		#STDERR("SubcookedBlastL=",SubcookedBlastL) ##DEBUG
 		#selectedSeqSL = main1(CurrentNameS,LonlySubcookedBlastL) ## Get Sequnces to create consensus and remove the member from ContigNamelistL
-		ExtendedOutL = main1(CurrentNameS,LonlySubcookedBlastL) ## Get ExtendedSeqS
+		ExtendedOutL = main1(CurrentNameS,LonlySubcookedBlastL, MismatchAllowI) ## Get ExtendedSeqS
 		STDERR("main0.ExtendedOutL",ExtendedOutL) ##DEBUG
 		consensusS = ExtendedOutL[0]
 		
@@ -742,6 +743,7 @@ opt.add_option("-q",help="*query database path",dest='q',default="DB_PATH")
 opt.add_option("-d",help="subject database path",dest='d')
 opt.add_option("-e",help="E-value cutoff for selected hit",dest="e",default="10.0")
 opt.add_option("-c",help="query-length covery rate cutoff for selected hit",default="0.5")
+opt.add_option("-m",help="query-length covery rate cutoff for selected hit",default="0",dest='m')
 opt.add_option("--TAG",help="Spicies Tag in protein name",default="0",dest="TAG")
 (options, args) = opt.parse_args()
 
@@ -750,6 +752,7 @@ __QCovF__ = float(options.c)*100.0 ;STDERR("__QCovF__ = ",__QCovF__)
 __EvalF__ = float(options.e)	;STDERR("__EvalF__ = ",__EvalF__)
 __TAG__ = options.TAG
 DBname = options.q
+MismatchAllowI = int(options.m)
 
 if options.i == '0': ##get input from pipe
 	INS = sys.stdin.read()
