@@ -10,9 +10,9 @@ def STDERR(*StrInS): #Function For Debugging
 	outS = ' '.join([str(x) for x in StrInS])
 	sys.stderr.write(str(outS)+'\n')
 
-def ConcurrentCall(Fnc, InputL, waitI):
+def ConcurrentCall(Fnc, InputL, threadsI):
 	QueD = {}
-	pool = ProcessPoolExecutor(12)
+	pool = ProcessPoolExecutor(threadsI)
 	numL = [x for x in range(len(InputL))]
 	OutputL = []
 	for i in numL:
@@ -64,7 +64,7 @@ class hit(object):
 		self.bitscoreF = float(self.AttributesL[11])
 		self.slenI = int(self.AttributesL[12])
 		self.qlenI = int(self.AttributesL[13])
-		self.qcovsF = float(abs(self.qendI - self.qstartI))
+		self.qcovsF = float(abs(self.qendI - self.qstartI)/self.qlenI)
 
 def Pgroup(selectOJBL):
 	nameL = [] ##create empty list to contain contigs names
@@ -84,7 +84,8 @@ def Pgroup(selectOJBL):
 
 	return groupedL
 
-def merge4(Ori_inputlistOBJ,coverage):
+
+def merge5(Ori_inputlistOBJ,coverage):
 	inputlistOBJ = copy.deepcopy(Ori_inputlistOBJ)
 	a = sorted(inputlistOBJ, key = lambda x:abs(x.sstartI - x.sendI) )[::-1]
 	clustL = []
@@ -94,8 +95,8 @@ def merge4(Ori_inputlistOBJ,coverage):
 		mark = a.pop(0)
 		#clustL.append([])
 
-		Mhead = mark.sstartI
-		Mtail = mark.sendI
+		Mhead = min(mark.sstartI,mark.sendI)
+		Mtail = max(mark.sstartI,mark.sendI)
 		Mlength = abs(mark.sendI - mark.sstartI)
 		
 		## <------------------->
@@ -104,14 +105,14 @@ def merge4(Ori_inputlistOBJ,coverage):
 
 		##    <------------------->
 		## <------------------>
-		temp2 = [x for x in a if max(x.sendI, x.sstartI) < Mtail and Mlength >= abs(x.sendI - x.sstartI) >= (coverage* Mlength) and (Mhead - min(x.sstartI,x.sendI)) <= coverage*(abs(x.sendI - x.sstartI))] 
+		temp2 = [x for x in a if max(x.sendI, x.sstartI) < Mtail and min(x.sendI, x.sstartI) <= Mhead and ( max(x.sendI, x.sstartI) - Mhead ) >= coverage*(abs(x.sendI - x.sstartI))] 
 		temp2 = [x for x in temp2 if x not in temp]
 
 		temp = temp + temp2
 		
 		## <------------------->
 		##     <------------------>		
-		temp2 = [x for x in a if min(x.sendI, x.sstartI) > Mhead and Mlength >= abs(x.sendI - x.sstartI) >= (coverage* Mlength) and (max(x.sendI, x.sstartI) - Mtail) <= coverage*(abs(x.sendI - x.sstartI))]
+		temp2 = [x for x in a if min(x.sendI, x.sstartI) > Mhead and max(x.sendI, x.sstartI) > Mtail and (Mtail - min(x.sendI,x.sstartI)) >= coverage*(abs(x.sendI - x.sstartI))] 
 		temp2 = [x for x in temp2 if x not in temp]
 
 		temp = temp + temp2
@@ -126,20 +127,15 @@ def merge4(Ori_inputlistOBJ,coverage):
 	return clustL
 
 
-def GroupScore(Eachgrouped1L):
-	groupedL =  merge4(Eachgrouped1L,0.75)
-	EachgroupedL = []
-	for L in groupedL:
-		CurrentL = sorted(L, key=lambda x:x.bitscoreF)[-1]
-		EachgroupedL.append(CurrentL)
+def GroupScore(Eachgrouped1L): ## Scoring for each protein ID by match coverage calculated from protein regions matched by query sequences.
+	groupedL =  merge5(Eachgrouped1L,0.75) ## Many query sequences may match to the same region. They will be merged before coverage calculation
+	EachgroupedL = [] 
+	for L in groupedL: ## for every merged groups
+		CurrentL = sorted(L, key=lambda x:x.bitscoreF)[-1] ## Sort hitOBJs in each merged group by bitscore
+		EachgroupedL.append(CurrentL) ## Select hits_OBJ with highest bitscore to represent the group match position
 	
-	OBJLsortedL = sorted(EachgroupedL, key=lambda x:x.sstartI )
-	#if OBJLsortedL[0].sstartI < OBJLsortedL[0].sendI:
-	#	HeadI = OBJLsortedL[0].sstartI
-	#	TailI = OBJLsortedL[0].sendI
-	#elif OBJLsortedL[0].sstartI > OBJLsortedL[0].sendI:
-	#	HeadI = OBJLsortedL[0].sendI
-	#	TailI = OBJLsortedL[0].sstartI
+	OBJLsortedL = sorted(EachgroupedL, key=lambda x:min(x.sstartI, x.sendI) ) ## Sort by match position on SUBJECT sequence 
+
 	HeadI = 0
 	TailI = 0
 	SLenI = OBJLsortedL[0].slenI
@@ -204,7 +200,7 @@ def QuerySeq(hitOBJ,__DBname__):
 	arg = "blastdbcmd -db "+DBnameS+" -strand " + QueryStrandS + " -entry \""+QnameS+"\";"
 	process = subprocess.Popen(arg, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 	x = process.communicate()	
-	TEMPseqs = x[0].strip()
+	TEMPseqs = x[0].strip() #.decode('utf-8')
 	#STDERR("TEMPseqs=",TEMPseqs)
 	del process
 	return	TEMPseqs
@@ -221,40 +217,190 @@ def musclecallCLW(SeqS):
 	if len(x) == 0:
 		x = '0'.encode('utf-8')
 	#STDERR("musclecallCLW IS RUNNING")
-	return x
+	return x.decode("utf-8")
+
+def musclecall(SeqS):
+	#SeqS = self.SeqS
+	#arg = "muscle -maxiters 32 -gapopen -1200 -quiet"
+	ByteSeq = SeqS.encode('utf-8')
+	#STDERR("musclecallCLW IS RUNNING")
+	arg = "muscle -maxiters 32 -quiet"
+	process = subprocess.Popen(arg, shell=True, stdin=subprocess.PIPE,stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+	x = process.communicate(ByteSeq)[0]
+	#STDERR("musclecallCLW out = ",x)
+	if len(x) == 0:
+		x = '0'.encode('utf-8')
+	#STDERR("musclecallCLW IS RUNNING")
+	return x.decode("utf-8")
+
+class FastaTool(object): ## class for manipulate sequences in fasta format
+	def __init__(self,FastaInS):
+		self.FastaInS = FastaInS
+		self.seqLenI = self.seqlen()
+		self.FastaSrev  = self.header() +"Rev\n" + self.reversecomplement()
+
+	def seqonly(self):
+		fastaL = self.FastaInS.splitlines()
+		#fastaL = [x for x in fastaL if x.find(">") != 0]
+		fastaL = [x for x in fastaL if x.find(">") == -1]
+		fastaL = [x.strip() for x in fastaL]
+		self.fastaS = ''.join(fastaL)
+		return self.fastaS
+	def FullSeqS(self):
+		return self.FastaInS
+
+	def SubSeqS(self,StartI,EndI):
+		
+		if StartI < EndI:
+			SubSeqS = self.seqonly()[StartI:EndI]
+			headerS = self.header() + ":"+str(StartI)+"-"+str(EndI)
+			return headerS+"\n"+SubSeqS+"\n"
+						
+		elif StartI > EndI:
+			SubSeqS = self.seqonly()[max(EndI-1,0):StartI]
+			headerS = self.header() + ":"+str(EndI)+"-"+str(StartI)
+			return headerS+"\n"+SubSeqS+"\n"
+
+	def header(self):
+		fastaL = self.FastaInS.splitlines()
+		fastaL = [x for x in fastaL if x.find(">") != -1]
+		fastaL = [x.strip() for x in fastaL]
+		self.headerS = fastaL[0]
+		return self.headerS
+
+	def name(self):
+		self.NameS = self.header().split(' ')[0].replace('>','').replace('lcl|','')
+		return self.NameS
+
+	def ManyLines(self,widthI):
+		seqS = self.seqonly()
+		seqLineI = len(seqS)/widthI
+		remainsI = len(seqS)%widthI
+		TEMPseqS = self.header()+"\n"
+		for i in range(seqLineI):
+			TEMPseqS = TEMPseqS + seqS[i*(widthI):(i+1)*(widthI)] + '\n'
+
+		TEMPseqS = TEMPseqS + seqS[(-1)*(remainsI):] + '\n'
+		return TEMPseqS
+
+
+	def reversecomplement(self):
+		string = self.seqonly()
+		#header = self.header() + "Rev"
+		reverse = string[::-1]
+		reverse = reverse.replace("A","?")
+		reverse = reverse.replace("T","A")
+		reverse = reverse.replace("?","T")
+		reverse = reverse.replace("G","?")
+		reverse = reverse.replace("C","G")
+		self.reverseS = reverse.replace("?","C")
+		#print self.reverseS
+		return self.reverseS ## complementary string ATCG --> CGAT
+
+	def seqlen(self):
+		
+		self.seqLenI = len(self.seqonly())
+		return self.seqLenI
 	
 def BlastXHitGroup(HitL,SimilarityF,InnerGapLimitI): ## Aling Each match Sequences to target sequences then pick only one with no gap more than threshold
 	SortedHitL = sorted(HitL, key = lambda x:x.bitscoreF)[::-1] ##sort by hit-bitscore 
 
-	groupedL =  merge4(SortedHitL,0.75)
+	groupedL =  merge5(SortedHitL,0.75)
 
 	TEMPSEQL = []
 	for group in groupedL:
 		inL = [[x ,__DBname__] for x in group]
-		ToALignSL = ConcurrentCall(QuerySeq,inL, 20)
+		ToALignSL = ConcurrentCall(QuerySeq,inL, 10)
 		TEMPSEQL.append( '\n'.join([ x.decode("utf-8") for x in ToALignSL]) )
-
-
-	#STDERR("TEMPSEQL[0]=",TEMPSEQL[0])
-	#MSA = musclecallCLW(TEMPSEQL[0])
-	#STDERR("MSA=",MSA)
 
 	ConInL = [[x] for x in TEMPSEQL]
 	#STDERR("TEMPSEQL=",TEMPSEQL)
 	MSAL = ConcurrentCall(musclecallCLW,ConInL, 20)
 	#STDERR("MSAL=",MSAL)
-	return MSAL	
+	return MSAL
 
+def OverlapHit(HitOBJ1,HitOBJ2):#get two blast hit object return 0 if match position on subject not overlap else return 1
+	#1 --------------        #1    ----------------
+	#2    ------------------ #2  ----------------
+	flagI = 0
+	if min(HitOBJ1.sstartI,HitOBJ1.sendI) <= min(HitOBJ2.sstartI,HitOBJ2.sendI) and max(HitOBJ1.sstartI,HitOBJ1.sendI) > min(HitOBJ2.sstartI,HitOBJ2.sendI):
+		flagI = 1
+	elif min(HitOBJ1.sstartI,HitOBJ1.sendI) >= min(HitOBJ2.sstartI,HitOBJ2.sendI) and min(HitOBJ1.sstartI,HitOBJ1.sendI) < max(HitOBJ2.sstartI,HitOBJ2.sendI):
+		flagI = 1
+	return flagI
 
-#		MSAfastaS =  musclecall(ToALignS)
-#		MSAfastaL = [x for x in MSAfastaSplit(MSAfastaS) if x[0].find(TagetSeqNameS) == -1]
-#		STDERR("SimilarPick.MSAfastaL=",MSAfastaL)
-#		scoredL = AlignScore(MSAfastaL)
-#		for each in scoredL: 
-#			if each[5] <= InnerGapLimitI:
-#				PickedL.append(each[0][0]+"\n"+each[0][1].replace("-",""))
-#
-#	return PickedL ## return [TargetSeqS, PickedSeqS1st, .... , PickedSeqSNth]
+def AlignScore(SeqsL):
+
+	scoredL = [] ## Empty list for score storing
+	alignLenI = len(SeqsL[0][1])
+	for seqS in SeqsL:
+		AllGapI = seqS[1].count("-")
+		HeadGapI = alignLenI - len(seqS[1].lstrip("-")) #count lead gap in alignment
+		TailGapI = alignLenI - len(seqS[1].rstrip("-")) #count tail gap in alignment
+		InnerGapI = AllGapI - (HeadGapI + TailGapI) #count inner gap in alignment
+		InnerGapOpenI = len([x for x in seqS[1].strip("-").split("-") if len(x) > 0]) - 1 #count inner gap opening in alignment
+		GapCountL = [seqS, AllGapI, HeadGapI, TailGapI, InnerGapI, InnerGapOpenI]
+		scoredL.append(GapCountL)
+	
+	return 	scoredL
+
+def MSAfastaSplit(MSAfasta):
+	MSAfastaL = MSAfasta.split('>') ## Take input aligment as fasta format
+	MSAfastaL = ['>' + x for x in MSAfastaL if len(x) > 0] ##Eliminate empty items
+	MSAfastaL2 = []
+	for x in MSAfastaL:## Separate each sequences
+		xL = x.splitlines()
+		MSAfastaL2.append( [ xL[0],''.join(xL[1:]) ] )
+
+	return MSAfastaL2 ##Return 2D List [[NameS,seqS],[NameS,seqS]]
+
+def MSACheck(MSAS): #Check consistency of MSA 
+	MSAfastaL = [x for x in MSAfastaSplit(MSAS)]
+	scoredL = AlignScore(MSAfastaL)
+	#STDERR("MSACheck.scoredL",scoredL)
+	return scoredL
+
+def BlastHitJoiner(HitL):
+	SortedHitL = sorted(HitL, key = lambda x:x.bitscoreF)[::-1] ##sort by hit-bitscore
+	GroupL = []
+	UsedNameL = []
+	NumI = 0
+	LimitI = len(SortedHitL)
+	while len(SortedHitL) > 0 and NumI < LimitI+1:
+		CL = SortedHitL.pop(0) ##select hit with highest bit-score to use as anchor
+		STDERR("ANCHOR=",CL.qseqidS)
+		tmpL = [x for x in SortedHitL if OverlapHit(CL,x) > 0 and x.qseqidS not in UsedNameL]
+		inL = [[x ,__DBname__] for x in tmpL]
+		ToALignSL = [x.decode("utf-8") for x in ConcurrentCall(QuerySeq, inL, 10)]
+		#STDERR("BlastHitJoiner.ToALignSL",ToALignSL)
+		CLseqS = QuerySeq(CL,__DBname__).decode("utf-8")
+		#STDERR("BlastHitJoiner.CLseqS",CLseqS)
+		ConInL = [[CLseqS + "\n" + x] for x in ToALignSL]
+		#STDERR("BlastHitJoiner.ConInL",ConInL)
+		MSAL = [x for x in ConcurrentCall(musclecall, ConInL, 10)]		
+		ChkL = [x for x in ConcurrentCall(MSACheck, [[x] for x in MSAL], 10)]
+		NumI += 1
+	
+		#STDERR("BlastHitJoiner.ChkL",str(ChkL).replace("]],","\n"))
+		UsedNameL.append(CL.qseqidS.replace("lcl|",""))
+		GroupL.append([CL.qseqidS])
+		for i in ChkL: ##DEBUG
+			STDERR("i[1][0]=",'\n'.join(i[1][0])) ##DEBUG
+			if i[1][-2] < 2 and i[1][-1] < 1:
+				SeqNameS = FastaTool(i[1][0][0]).name()
+				GroupL[-1].append(SeqNameS)
+				if SeqNameS not in UsedNameL:
+					UsedNameL.append(SeqNameS)
+				
+			STDERR("i[1][1:]=",i[1][1:]) ##DEBUG
+
+		SortedHitL = sorted( [x for x in SortedHitL if x.qseqidS not in UsedNameL],  key = lambda x:x.bitscoreF)[::-1] ##sort by hit-bitscore
+
+	STDERR("BlastHitJoiner.UsedNameL",UsedNameL)
+	STDERR("BlastHitJoiner.GroupL",GroupL)
+	return UsedNameL
+		
+		
 
 def main(INS):
 	INL = (chop(INS))
@@ -294,15 +440,16 @@ def main2(INS):
 	#for OBJL in group(selectOJBL):
 	for OBJL in Pgroup(selectOJBL):
 		ScoreFL = GroupScore(OBJL)
-		sortedOBJL = sorted([x.AttributesL for x in OBJL], key=lambda x:(int(x[8]) + int(x[9]))/2 )
-		TXnumS = str(len(ScoreFL[0]))
-		outS = outS + '\n'.join(['\t'.join(x) for x in sortedOBJL]) + "\nPoolCovScpre=\t" + str(ScoreFL[1]) +"\t"+ ScoreFL[0][0][1] + "\tTXnumS=\t"+TXnumS +  "\n############\n"		
-		outS = outS + str(ScoreFL[0]).replace("""],""","""]\n""") + "\n############\n"
-		MSAL = [ x.decode('utf-8') for x in BlastXHitGroup(OBJL,0.98,0) ]
-		STDERR("TEMPSEQ") ##DEBUG
-		STDERR(''.join(MSAL)) ##DEBUG
 		
-	
+		sortedOBJL = sorted( OBJL, key=lambda x:( (x.sstartI + x.sendI)/2 ,min(x.sstartI, x.sendI) ) )
+		TXnumS = str(len(ScoreFL[0]))
+		outS = outS + '\n'.join(['\t'.join((x.AttributesL)) for x in sortedOBJL]) + "\nPoolCovScpre=\t" + str(ScoreFL[1]) +"\t"+ ScoreFL[0][0][1] + "\tTXnumS=\t"+TXnumS +  "\n############\n"		
+		outS = outS + str(ScoreFL[0]).replace("""],""","""]\n""") + "\n############\n"
+		##tempolary marked ##MSAL = [ x.decode('utf-8') for x in BlastXHitGroup(OBJL,0.98,0) ]
+		#STDERR("TEMPSEQ") ##DEBUG
+		#STDERR(''.join(MSAL)) ##DEBUG
+		BlastHitJoiner(OBJL)##DEBUG
+		
 	#STDERR(group(selectOJBL)[0])
 	return outS
 
@@ -318,7 +465,7 @@ opt.add_option("-q",help="*query database path",dest='q',default="DB_PATH")
 (options, args) = opt.parse_args()
 
 ##Documentation part
-__QCovF__ = float(options.c)*100.0 ;STDERR("__QCovF__ = ",__QCovF__)
+__QCovF__ = float(options.c) ;STDERR("__QCovF__ = ",__QCovF__)
 __EvalF__ = float(options.e)	;STDERR("__EvalF__ = ",__EvalF__)
 __TAG__ = options.TAG
 __DBname__ = options.q
