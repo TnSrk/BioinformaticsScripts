@@ -13,7 +13,9 @@
 ## 2014Oct27 exclude unitigname which used
 
 import sys,  subprocess, optparse, re, time
+from time import sleep
 from multiprocessing import Pool, cpu_count
+from concurrent.futures import ProcessPoolExecutor
 
 
 def STDERR(*StrInS): #Function For Debugging
@@ -55,6 +57,34 @@ def multiCall(FunctionSinputL):##for calling function in parallel mode
 	#STDERR(str(Funct)+str(time.strftime("%H:%M:%S"))) ##DEBUG
 	return FunctionOut
 
+def ConcurrentCall(Fnc, InputL, threadsI, *arg):
+	waitF = 0.0
+	if len(arg) == 1:
+		waitF = float(arg[0])
+	QueD = {}
+	pool = ProcessPoolExecutor(threadsI)
+	numL = [x for x in range(len(InputL))]
+	OutputL = []
+	for i in numL:
+		QueD["Q"+str(i)] = pool.submit(Fnc,*InputL[i])
+		#STDERR("*InputL[i]=",*InputL[i])
+
+	RoundI = 0
+	while True:# and RoundI < waitI:
+		xQueL =	[QueD["Q"+str(i)].done() for i in numL]
+		#STDERR(str(xQueL))
+		if False not in xQueL:
+			#OutputL.append(xQueL)
+			break
+		else:
+			if waitF > 0.0:
+				sleep(waitF)
+
+		RoundI += 1
+
+	OutputL = [QueD["Q"+str(i)].result() for i in numL if QueD["Q"+str(i)].done() == True]
+
+	return OutputL
 
 class FastaTool(object): ## class for manipulate sequences in fasta format
 	def __init__(self,FastaInS):
@@ -191,6 +221,53 @@ def realign(fastaMsaS):
 	#alignoutS = consensusExtract2(musclecall(alignS),0.1,0.25)
 	LongerSeq = seqonly(LongerSeq)
 	return LongerSeq
+
+def consensusExtractKW(MSAfasta,GapWeightF,MinPF,GapIgnoreFlagI): ##MinPF = minimum percent for consensus
+
+	SeqsL = MSAfasta.split('>') ## Take input aligment as fasta format
+	SeqsL = ['>' + x for x in SeqsL if len(x) > 0] ##Eliminate empty items
+	SeqsL = [FastaTool(x) for x in SeqsL] ## Create fasta object for each sequences
+	SeqsL = [x.seqonly().upper() for x in SeqsL] ## extract sequences from each fasta
+	SeqsL = [x for x in SeqsL if len(x) > 0]  ##Eliminate empty items
+
+	Cons = '' ##creat variable for consensus string storing 
+	AnumI = 0;TnumI = 0;GnumI=0;CnumI=0;GapNum=0 ##innitiate gap count variables
+	GapS = '-' ## define gap character 
+	columndepthF = float(len(SeqsL)) ## Define column depth for voting 
+
+	#EndGapI = 10 ##to modify (lower) gap score at the end of MSA
+	#SwitchFlag = 0
+	for i in range(len(SeqsL[0])): ## loop over coluns of alignment
+		anMSAcolumnL = [x[i] for x in SeqsL] ## extract each base from each sequences in column i_th
+		NucD = {} ## create dictionary for keep bases occurence
+		RAWGapF = float(anMSAcolumnL.count(GapS))/columndepthF ## calculate gap ratio
+		NucD[GapS] = RAWGapF*GapWeightF ## calculate gap ratio
+		NucD['A'] = float(anMSAcolumnL.count('A'))/columndepthF ## calculate base "A" ratio
+		NucD['T'] = float(anMSAcolumnL.count('T'))/columndepthF ## calculate base "T" ratio
+		NucD['G'] = float(anMSAcolumnL.count('G'))/columndepthF ## calculate base "G" ratio
+		NucD['C'] = float(anMSAcolumnL.count('C'))/columndepthF ## calculate base "C" ratio		
+
+		VotesNumF = max(NucD.values()) ## select max occurences
+		VotesL = [x for x in NucD if NucD[x] == VotesNumF] ## find out which base is the most popular
+		if GapIgnoreFlagI == 0:
+			VotesL = [x for x in NucD if NucD[x] == VotesNumF and NucD[x] >= MinPF]  ##  if the base is not popular enought then vote to N
+		elif GapIgnoreFlagI == 1:
+			VotesL = [x for x in NucD if NucD[x] == VotesNumF and NucD[x] >= (MinPF - NucD[GapS])] ## To ignore gap, reduces gap weight by gap ratio
+		if len(VotesL) == 0: ## If there is not a popular one then vtoe to N for the column
+			VotesL = ['N']
+
+		if len(VotesL) == 1: ## If there is only one popular base in a list then vtoe to that base for the column
+			Cons = Cons + VotesL[0]
+
+		elif len(VotesL) == 2 and GapS in VotesL:  ## If there are one popular base and gap in a list then select that base
+			VotesL = [x for x in VotesL if x != GapS]
+			Cons = Cons + VotesL[0]
+		elif len(VotesL) > 1 and  GapS not in VotesL: ## If more than one popular base then define that base in the column as N 
+			Cons = Cons + 'N'
+
+	Consout = Cons.strip().strip('N') ## delete N characters at both ends
+
+	return Consout
 
 def ConsMod2(seqS,WildCardS):
 	ModSeqS = seqS.splitlines()
@@ -523,6 +600,47 @@ def simplejoin2(seqIn1S,seqIn2S,PI):
 
 	AlignoutS = '>' + "simplejoin_OUT\n" + AlignoutS +"\n"
 	return AlignoutS
+
+def MSAfastaSplit(MSAfasta):
+		MSAfastaL = MSAfasta.split('>') ## Take input aligment as fasta format
+		MSAfastaL = ['>' + x for x in MSAfastaL if len(x) > 0] ##Eliminate empty items
+		MSAfastaL2 = []
+		for x in MSAfastaL:## Separate each sequences
+			xL = x.splitlines()
+			MSAfastaL2.append( [ xL[0],''.join(xL[1:]) ] )
+
+		return MSAfastaL2 ##Return 2D List [[NameS,seqS],[NameS,seqS]]
+
+def MSACheck(MSAS): #Check consistency of MSA 
+	MSAfastaL = [x for x in MSAfastaSplit(MSAS)]
+	scoredL = [MSAQual(x) for x in MSAfastaL] #create list of object of Alignment Score of each sequence in MSA
+	#STDERR("MSACheck.scoredL",scoredL)
+	return scoredL
+
+class MSAQual(object): #Take a line of alignment in fasta format then return alignment quality parameters for a sequence
+	def __init__(self,OneFastaMSAS):
+		self.OneFastaMSAS = OneFastaMSAS
+		self.nameS = OneFastaMSAS[0].replace(">","").split()[0].replace("lcl|","")
+		self.SeqS = OneFastaMSAS[1]		
+		self.alignLenI, self.AllGapI, self.HeadGapI, self.TailGapI, self.InnerGapI, self.GapOpenI, self.FragNumI, self.LargeRatioF, self.SmallRatioF = self.AlignScore(self.SeqS)
+		self.GapRatioF = self.InnerGapI/len(self.SeqS)
+	
+	def AlignScore(self,Seqs):
+		alignLenI = len(Seqs)
+		AllGapI = Seqs.count("-")
+		HeadGapI = alignLenI - len(Seqs.lstrip("-")) #count lead gap in alignment
+		TailGapI = alignLenI - len(Seqs.rstrip("-")) #count tail gap in alignment
+		InnerGapI = AllGapI - (HeadGapI + TailGapI) #count inner gap in alignment
+		GapOpenI = len([x for x in Seqs.strip("-").split("-") if len(x) > 0]) - 1 #count inner gap opening in alignment
+		FragmentL = sorted([x for x in re.sub('\-+','-',Seqs).split('-') if len(x) != 0], key=lambda x:len(x))
+		FragNumI = len(FragmentL)
+		LargeRatioF = len(FragmentL[-1])/alignLenI
+		SmallRatioF = len(FragmentL[0])/alignLenI
+		if SmallRatioF == LargeRatioF:
+			SmallRatioF = 0.0
+		scoredL = [alignLenI, AllGapI, HeadGapI, TailGapI, InnerGapI, GapOpenI, FragNumI, LargeRatioF, SmallRatioF]
+		return 	scoredL
+
 
 def OverlapCheck(seq1,seq2, *arg):## If seq1 tail overlap with seq2 head then return overlap length, else return 0
 	if len(arg) > 0:

@@ -2,6 +2,7 @@
 ##TXblastX.py.py
 ##Takes input from blastx with -outfmt '6 qseqid sseqid pident length mismatch gapopen qstart qend sstart send evalue bitscore slen qlen qcovs' option
 import OverlapCheck as OC
+from FNpool import ConcurrentCall, MSACheck as MCK
 import sys,optparse, copy, subprocess
 from concurrent.futures import ProcessPoolExecutor
 from time import sleep
@@ -10,7 +11,7 @@ def STDERR(*StrInS): #Function For Debugging
 	outS = ' '.join([str(x) for x in StrInS])
 	sys.stderr.write(str(outS)+'\n')
 
-def ConcurrentCall(Fnc, InputL, threadsI):
+def ConcurrentCall0(Fnc, InputL, threadsI):
 	QueD = {}
 	pool = ProcessPoolExecutor(threadsI)
 	numL = [x for x in range(len(InputL))]
@@ -29,7 +30,7 @@ def ConcurrentCall(Fnc, InputL, threadsI):
 
 		else:
 			
-			sleep(3)
+			sleep(0.01)
 
 		RoundI += 1
 
@@ -360,50 +361,7 @@ def MSACheck(MSAS): #Check consistency of MSA
 	#STDERR("MSACheck.scoredL",scoredL)
 	return scoredL
 
-def BlastHitJoiner(HitL):
-	SortedHitL = sorted(HitL, key = lambda x:x.bitscoreF)[::-1] ##sort by hit-bitscore
-	GroupL = []
-	UsedNameL = []
-	NumI = 0
-	LimitI = len(SortedHitL)
-	while len(SortedHitL) > 0 and NumI < LimitI+1:
-		CL = SortedHitL.pop(0) ##select hit with highest bit-score to use as anchor
-		STDERR("ANCHOR=",CL.qseqidS)
-		tmpL = [x for x in SortedHitL if OverlapHit(CL,x) > 0 and x.qseqidS not in UsedNameL]
-		inL = [[x ,__DBname__] for x in tmpL]
-		ToALignSL = [x.decode("utf-8") for x in ConcurrentCall(QuerySeq, inL, 10)]
-		#STDERR("BlastHitJoiner.ToALignSL",ToALignSL)
-		CLseqS = QuerySeq(CL,__DBname__).decode("utf-8")
-		#STDERR("BlastHitJoiner.CLseqS",CLseqS)
-		ConInL = [[CLseqS + "\n" + x] for x in ToALignSL]
-		#STDERR("BlastHitJoiner.ConInL",ConInL)
-		MSAL = [x for x in ConcurrentCall(musclecall, ConInL, 10)]		
-		#ChkL = [x for x in ConcurrentCall(MSACheck, [[x] for x in MSAL], 10)]
-		ChkL = [x for x in ConcurrentCall(MSACheck, [[x] for x in MSAL], 20)]
-		NumI += 1
-	
-		#STDERR("BlastHitJoiner.ChkL",str(ChkL).replace("]],","\n"))
-		UsedNameL.append(CL.qseqidS.replace("lcl|",""))
-		GroupL.append([CL.qseqidS.replace("lcl|","")])
-		TMPusednameL = []
-		for i in ChkL: ##DEBUG
-			STDERR("i[0][0]=",'\n'.join(i[0][0])) ##DEBUG
-			STDERR("i[1][0]=",'\n'.join(i[1][0])) ##DEBUG
-			if i[1][-2] < 2 and i[1][-1] < 1 and i[0][-2] < 2 and i[0][-1] < 1:
-				SeqNameS = FastaTool(i[1][0][0]).name()
-				GroupL[-1].append(SeqNameS)
-				if SeqNameS not in UsedNameL:
-					TMPusednameL.append(SeqNameS)
-					UsedNameL.append(SeqNameS)
 
-			
-			STDERR("i[1][1:]=",i[1][1:]) ##DEBUG
-		SortedHitL = [x for x in SortedHitL if x.qseqidS.replace("lcl|","") not in TMPusednameL]
-		SortedHitL = sorted( [x for x in SortedHitL if x.qseqidS not in UsedNameL],  key = lambda x:x.bitscoreF)[::-1] ##sort by hit-bitscore
-
-	STDERR("BlastHitJoiner.UsedNameL",UsedNameL)
-	STDERR("BlastHitJoiner.GroupL",GroupL)
-	return UsedNameL
 
 def BlastHitJoiner2(HitL):
 	SortedHitL = sorted(HitL, key = lambda x:x.bitscoreF)[::-1] ##sort by hit-bitscore
@@ -420,28 +378,33 @@ def BlastHitJoiner2(HitL):
 		#STDERR("BlastHitJoiner.ToALignSL",ToALignSL)
 		CLseqS = QuerySeq(CL,__DBname__).decode("utf-8")
 		#STDERR("BlastHitJoiner.CLseqS",CLseqS)
+		#ConInL = [[CLseqS , x, 8] for x in ToALignSL]
 		ConInL = [[CLseqS , x] for x in ToALignSL]
 		#STDERR("BlastHitJoiner.ConInL",ConInL)
-		ChkL = [x for x in ConcurrentCall(OC.overlap, ConInL, 20)]
+		ChkL = [x for x in ConcurrentCall(OC.overlap, ConInL, 8)]
 		PassedL = [x for x in ChkL if x.OverlapF > 0.1]
-		STDERR("BlasthitJoiner2.ChkL",[[x.SeqS0.name(),x.SeqS1.name(),x.OverlapI,x.OverlapF,x.AI] for x in PassedL])
+		#STDERR("BlasthitJoiner2.PassedL",[[x.SeqS0.name(),x.SeqS1.name(),x.OverlapI,x.OverlapF,x.AI] for x in PassedL]) ##DEBUG
 		MSAInL = [x.MSA(x.AI,1) for x in PassedL]
-		#STDERR("BlasthitJoiner2.MSAInL",MSAInL)		
-		ChkL2 = [x for x in ConcurrentCall(MSACheck, [[x] for x in MSAInL], 10)]
+		#STDERR("BlasthitJoiner2.MSAInL",MSAInL) ##DEBUG		
+		ChkL2 = [x for x in ConcurrentCall(MCK, [[x] for x in MSAInL], 10)]
 		NumI += 1
-		#break##DEBUG
+		
 	
-		#STDERR("BlastHitJoiner.ChkL2",str(ChkL2).replace("]],","\n"))
+		#STDERR("BlastHitJoiner.ChkL2",str(ChkL2).replace("]],","\n")) ##DEBUG
+		#STDERR("BlastHitJoiner.ChkL2[0]",ChkL2[0][0].name,ChkL2[0].FragNumI,ChkL2[0].LargeRatioF)  ##DEBUG
+		#break##DEBUG
 		UsedNameL.append(CL.qseqidS.replace("lcl|",""))
 		GroupL.append([CL.qseqidS.replace("lcl|","")])
 		#TMPusednameL = []
 		for i in ChkL2: ##DEBUG
-			#STDERR("############################################################ i ########################################################")
+			#STDERR("############################################################ i ########################################################") ##DEBUG
 			#STDERR(i)
-			#STDERR("i[0][0]=",'\n'.join(i[0][0])) ##DEBUG
-			#STDERR("i[1][0]=",'\n'.join(i[1][0])) ##DEBUG
-			if i[1][-2] < 2 and i[1][-1] < 1 and i[0][-2] < 2 and i[0][-1] < 1:
-				SeqNameS = FastaTool(i[1][0][0]).name()
+			Seq0OBJ = i[0]
+			Seq1OBJ = i[1]
+			STDERR("Seq0OBJ.name=",Seq0OBJ.nameS,Seq0OBJ.FragNumI,Seq0OBJ.LargeRatioF,Seq0OBJ.SmallRatioF,Seq0OBJ.HeadGapI,Seq0OBJ.TailGapI,Seq0OBJ.GapRatioF) ##DEBUG
+			STDERR("Seq1OBJ.name=",Seq1OBJ.nameS,Seq1OBJ.FragNumI,Seq1OBJ.LargeRatioF,Seq1OBJ.SmallRatioF,Seq1OBJ.HeadGapI,Seq1OBJ.TailGapI,Seq1OBJ.GapRatioF) ##DEBUG
+			if Seq0OBJ.FragNumI < 3 and Seq1OBJ.FragNumI < 3 and Seq0OBJ.GapRatioF < 0.1 and Seq1OBJ.GapRatioF < 0.1:
+				SeqNameS = Seq1OBJ.nameS
 				
 				if SeqNameS not in UsedNameL:
 					GroupL[-1].append(SeqNameS)
@@ -508,6 +471,7 @@ def main2(INS,TresholdF):
 		if ScoreFL[1] > TresholdF:
 			GroupL = BlastHitJoiner2(OBJL)##DEBUG
 			outS = outS + "\n############# Align hit position \n"
+			#STDERR("main2.GroupL=",GroupL) ##DEBUG
 			for i in GroupL:
 				TMPobjL  = []
 				for ii in i:
@@ -515,7 +479,7 @@ def main2(INS,TresholdF):
 				
 				TMPstartI = min([min(x.sstartI, x.sendI) for x in TMPobjL])
 				TMPendI = max([max(x.sstartI, x.sendI) for x in TMPobjL])
-				outS = outS + "\n"+ str(TMPstartI) + "-" + str(TMPendI) + "\t" + ','.join(i)
+				outS = outS + "\n"+ str(TMPstartI) + "-" + str(TMPendI) + "\t" + ' '.join(i)
 		else:
 			
 			outS = outS + "\n############# Overall Coverage not pass cut-off \n"
