@@ -60,7 +60,7 @@ class FastaTool(object): ## class for manipulate sequences in fasta format
 	def __init__(self,FastaInS):
 		self.FastaInS = FastaInS
 		self.seqLenI = self.seqlen()
-		self.FastaSrev  = self.header() +"Rev\n" + self.reversecomplement()
+		self.FastaSrev  =  self.header() +"Rev\n" + self.reversecomplement()
 
 	def seqonly(self):
 		fastaL = self.FastaInS.splitlines()
@@ -69,6 +69,7 @@ class FastaTool(object): ## class for manipulate sequences in fasta format
 		fastaL = [x.strip() for x in fastaL]
 		fastaS = ''.join(fastaL)
 		return fastaS
+
 	def FullSeqS(self):
 		return self.FastaInS
 
@@ -88,18 +89,19 @@ class FastaTool(object): ## class for manipulate sequences in fasta format
 		fastaL = self.FastaInS.splitlines()
 		fastaL = [x for x in fastaL if x.find(">") != -1]
 		fastaL = [x.strip() for x in fastaL]
-		self.headerS = fastaL[0]
-		return self.headerS
+		headerS = fastaL[0]
+		return headerS
 
 	def name(self):
-		self.NameS = self.header().split(' ')[0].replace('>','').replace('lcl|','')
-		return self.NameS
+		NameS = self.header().split(' ')[0].replace('>','').replace('lcl|','')
+		return NameS
 
 	def ManyLines(self,widthI):
 		seqS = self.seqonly()
 		seqLineI = len(seqS)/widthI
 		remainsI = len(seqS)%widthI
-		TEMPseqS = self.header()+"\n"
+		#TEMPseqS = self.header()+"\n"
+		TEMPseqS = ''
 		for i in range(seqLineI):
 			TEMPseqS = TEMPseqS + seqS[i*(widthI):(i+1)*(widthI)] + '\n'
 
@@ -110,20 +112,26 @@ class FastaTool(object): ## class for manipulate sequences in fasta format
 	def reversecomplement(self):
 		string = self.seqonly()
 		#header = self.name() + "c"
-		reverse = string[::-1]
+		reverse = string[::-1].upper()
+
 		reverse = reverse.replace("A","?")
 		reverse = reverse.replace("T","A")
 		reverse = reverse.replace("?","T")
 		reverse = reverse.replace("G","?")
 		reverse = reverse.replace("C","G")
-		self.reverseS = ">"+self.name()+"c\n"+reverse.replace("?","C")
+		reverse = reverse.replace("?","C")
+		if "U" in reverse:
+			reverse = reverse.replace("A","?")
+			reverse = reverse.replace("U","A")
+			reverse = reverse.replace("?","U")
+		reverseS = reverse	
 		#print self.reverseS
-		return self.reverseS ## complementary string ATCG --> CGAT
+		return reverseS ## complementary string ATCG --> CGAT
 
 	def seqlen(self):
 		
-		self.seqLenI = len(self.seqonly())
-		return self.seqLenI
+		seqLenI = len(self.seqonly())
+		return seqLenI
 
 def realign(fastaMsaS):
 	SeqsL = fastaMsaS.split('>')
@@ -434,13 +442,19 @@ def getSseq(DBname,Scontigname,Direction):
 	return  TEMPseqs
 
 def musclecall(SeqS,*arg):
-	arg = "muscle -maxiters 32 -quiet"
-	if len(arg) > 0:
-		arg = arg + " -clwstrict"
+	AlignTagI = 0
+	argS = "muscle -maxiters 32 -quiet"
+	if len(arg) == 1:
+		AlignTagI = arg[0]
+	if AlignTagI == 0:
+		argS = argS + " -clwstrict"
+	elif AlignTagI == 1:
+		argS = argS
+
 	SeqSb = SeqS.encode()
 	#arg = "muscle -maxiters 32 -gapopen -1200 -quiet"
 	
-	process = subprocess.Popen(arg, shell=True, stdin=subprocess.PIPE,stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+	process = subprocess.Popen(argS, shell=True, stdin=subprocess.PIPE,stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 	x = process.communicate(SeqSb)[0].decode()
 	if len(x) == 0:
 		x = '0'
@@ -572,7 +586,8 @@ def OverlapCheck2(seq1,seq2, *arg):## If seq1 tail overlap with seq2 head then r
 	EndS = str(seq1[-SeqGrepNumI:])
 	#HeadS = str(seq1[:SeqGrepNumI])
 
-	EndpatternS = homopolymerRegex(EndS,relaxI,1).replace('\\',"")
+	#EndpatternS = homopolymerRegex(EndS,relaxI,1).replace('\\',"")
+	EndpatternS = EndS 
 	
 	
 	slideLimI = Ls1I - SeqGrepNumI;slideI = 1
@@ -585,8 +600,9 @@ def OverlapCheck2(seq1,seq2, *arg):## If seq1 tail overlap with seq2 head then r
 	while (len(MatchL) == 0 or MatchL.count('') >= len(MatchL) or MatchS == '') and slideI < slideLimI and SwitchFlagI != 0:
 		
 		TEMPEndS = seq1[-(SeqGrepNumI+slideI):-slideI] 
-		EndpatternS = homopolymerRegex(TEMPEndS,relaxI,1).replace('\\',"")
-		STDERR("OverlapCheck.EndpatternS=",EndpatternS)
+		#EndpatternS = homopolymerRegex(TEMPEndS,relaxI,1).replace('\\',"")
+		EndpatternS = TEMPEndS 
+		#STDERR("OverlapCheck.EndpatternS=",EndpatternS)
 		MatchL = re.findall(EndpatternS,seq2S)
 
 		if len(MatchL) > 0 and SwitchFlagI > 0:
@@ -605,9 +621,10 @@ def OverlapCheck2(seq1,seq2, *arg):## If seq1 tail overlap with seq2 head then r
 		elif SwitchFlagI == 0:
 			slideI += 1
 		
-		STDERR("WhileLoopPlus1")
-		STDERR("SwitchFlagI=",SwitchFlagI,"slideI=",slideI)
-		STDERR("MatchL=",MatchL)
+		#STDERR("WhileLoopPlus1")
+		#STDERR("SwitchFlagI=",SwitchFlagI,"slideI=",slideI)
+		#STDERR("MatchL=",MatchL)	
+	#STDERR("WhileLoop EXIT")
 
 	#DEBUG = "EndpatternS in OverlapCheck while loop "+EndpatternS + str(re.findall(EndpatternS,seq2S)) + '\n' ##DEBUG
 	#STDERR(DEBUG) ##DEBUG
@@ -620,14 +637,14 @@ def OverlapCheck2(seq1,seq2, *arg):## If seq1 tail overlap with seq2 head then r
 		#STDERR("len(MatchS)=",len(MatchS))
 		#STDERR("(slideI - 1)",(slideI - 1))
 	elif TMPmatchS != '':
-		OverlapI = seq2S.find(TMPmatchS) + len(MatchS) #- (slideI - 1)
+		OverlapI = seq2S.find(TMPmatchS) + len(TMPmatchS) #- (slideI - 1)
 				
 	else:OverlapI = -1
 	 
  
 	#STDERR("OverlapI="+str(OverlapI)+'\n') ##DEBUG
 	#STDERR("slideI="+str(slideI)+'\n') ##DEBUG
-	if OverlapI < 0:OverlapI = 0
+	#if OverlapI < 0:OverlapI = 0
 	return OverlapI
 
 def LongerSeqS4(seq1,seq2,PI):

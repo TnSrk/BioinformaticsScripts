@@ -1,7 +1,7 @@
 #!/usr/bin/python
 ##TXblastX.py.py
 ##Takes input from blastx with -outfmt '6 qseqid sseqid pident length mismatch gapopen qstart qend sstart send evalue bitscore slen qlen qcovs' option
-
+import OverlapCheck as OC
 import sys,optparse, copy, subprocess
 from concurrent.futures import ProcessPoolExecutor
 from time import sleep
@@ -378,27 +378,84 @@ def BlastHitJoiner(HitL):
 		ConInL = [[CLseqS + "\n" + x] for x in ToALignSL]
 		#STDERR("BlastHitJoiner.ConInL",ConInL)
 		MSAL = [x for x in ConcurrentCall(musclecall, ConInL, 10)]		
-		ChkL = [x for x in ConcurrentCall(MSACheck, [[x] for x in MSAL], 10)]
+		#ChkL = [x for x in ConcurrentCall(MSACheck, [[x] for x in MSAL], 10)]
+		ChkL = [x for x in ConcurrentCall(MSACheck, [[x] for x in MSAL], 20)]
 		NumI += 1
 	
 		#STDERR("BlastHitJoiner.ChkL",str(ChkL).replace("]],","\n"))
 		UsedNameL.append(CL.qseqidS.replace("lcl|",""))
-		GroupL.append([CL.qseqidS])
+		GroupL.append([CL.qseqidS.replace("lcl|","")])
+		TMPusednameL = []
 		for i in ChkL: ##DEBUG
+			STDERR("i[0][0]=",'\n'.join(i[0][0])) ##DEBUG
 			STDERR("i[1][0]=",'\n'.join(i[1][0])) ##DEBUG
-			if i[1][-2] < 2 and i[1][-1] < 1:
+			if i[1][-2] < 2 and i[1][-1] < 1 and i[0][-2] < 2 and i[0][-1] < 1:
 				SeqNameS = FastaTool(i[1][0][0]).name()
 				GroupL[-1].append(SeqNameS)
 				if SeqNameS not in UsedNameL:
+					TMPusednameL.append(SeqNameS)
 					UsedNameL.append(SeqNameS)
-				
-			STDERR("i[1][1:]=",i[1][1:]) ##DEBUG
 
+			
+			STDERR("i[1][1:]=",i[1][1:]) ##DEBUG
+		SortedHitL = [x for x in SortedHitL if x.qseqidS.replace("lcl|","") not in TMPusednameL]
 		SortedHitL = sorted( [x for x in SortedHitL if x.qseqidS not in UsedNameL],  key = lambda x:x.bitscoreF)[::-1] ##sort by hit-bitscore
 
 	STDERR("BlastHitJoiner.UsedNameL",UsedNameL)
 	STDERR("BlastHitJoiner.GroupL",GroupL)
 	return UsedNameL
+
+def BlastHitJoiner2(HitL):
+	SortedHitL = sorted(HitL, key = lambda x:x.bitscoreF)[::-1] ##sort by hit-bitscore
+	GroupL = []
+	UsedNameL = []
+	NumI = 0
+	LimitI = len(SortedHitL)
+	while len(SortedHitL) > 0 and NumI < LimitI+1:
+		CL = SortedHitL.pop(0) ##select hit with highest bit-score to use as anchor
+		STDERR("ANCHOR=",CL.qseqidS.replace("lcl|",""))
+		tmpL = [x for x in SortedHitL if OverlapHit(CL,x) > 0 and x.qseqidS.replace("lcl|","") not in UsedNameL]
+		inL = [[x ,__DBname__] for x in tmpL]
+		ToALignSL = [x.decode("utf-8") for x in ConcurrentCall(QuerySeq, inL, 10)]
+		#STDERR("BlastHitJoiner.ToALignSL",ToALignSL)
+		CLseqS = QuerySeq(CL,__DBname__).decode("utf-8")
+		#STDERR("BlastHitJoiner.CLseqS",CLseqS)
+		ConInL = [[CLseqS , x] for x in ToALignSL]
+		#STDERR("BlastHitJoiner.ConInL",ConInL)
+		ChkL = [x for x in ConcurrentCall(OC.overlap, ConInL, 20)]
+		PassedL = [x for x in ChkL if x.OverlapF > 0.1]
+		STDERR("BlasthitJoiner2.ChkL",[[x.SeqS0.name(),x.SeqS1.name(),x.OverlapI,x.OverlapF,x.AI] for x in PassedL])
+		MSAInL = [x.MSA(x.AI,1) for x in PassedL]
+		#STDERR("BlasthitJoiner2.MSAInL",MSAInL)		
+		ChkL2 = [x for x in ConcurrentCall(MSACheck, [[x] for x in MSAInL], 10)]
+		NumI += 1
+		#break##DEBUG
+	
+		#STDERR("BlastHitJoiner.ChkL2",str(ChkL2).replace("]],","\n"))
+		UsedNameL.append(CL.qseqidS.replace("lcl|",""))
+		GroupL.append([CL.qseqidS.replace("lcl|","")])
+		#TMPusednameL = []
+		for i in ChkL2: ##DEBUG
+			#STDERR("############################################################ i ########################################################")
+			#STDERR(i)
+			#STDERR("i[0][0]=",'\n'.join(i[0][0])) ##DEBUG
+			#STDERR("i[1][0]=",'\n'.join(i[1][0])) ##DEBUG
+			if i[1][-2] < 2 and i[1][-1] < 1 and i[0][-2] < 2 and i[0][-1] < 1:
+				SeqNameS = FastaTool(i[1][0][0]).name()
+				
+				if SeqNameS not in UsedNameL:
+					GroupL[-1].append(SeqNameS)
+					#TMPusednameL.append(SeqNameS)
+					UsedNameL.append(SeqNameS)
+
+			
+			#STDERR("i[1][1:]=",i[1][1:]) ##DEBUG
+		SortedHitL = [x for x in SortedHitL if x.qseqidS.replace("lcl|","") not in UsedNameL]
+		SortedHitL = sorted( SortedHitL,  key = lambda x:x.bitscoreF)[::-1] ##sort by hit-bitscore
+
+	STDERR("BlastHitJoiner.UsedNameL",UsedNameL)
+	STDERR("BlastHitJoiner.GroupL",GroupL)
+	return GroupL
 		
 		
 
@@ -427,7 +484,7 @@ def main(INS):
 	#STDERR(group(selectOJBL)[0])
 	return outS
 
-def main2(INS):
+def main2(INS,TresholdF):
 	INL = (chop(INS))
 	hitOBJL = [hit(x) for x in INL]
 	#hitOBJL = [x for x in hitOBJL if TruncateCheck(x,10) == 1] ##remove truncated hit before processing
@@ -448,7 +505,21 @@ def main2(INS):
 		##tempolary marked ##MSAL = [ x.decode('utf-8') for x in BlastXHitGroup(OBJL,0.98,0) ]
 		#STDERR("TEMPSEQ") ##DEBUG
 		#STDERR(''.join(MSAL)) ##DEBUG
-		BlastHitJoiner(OBJL)##DEBUG
+		if ScoreFL[1] > TresholdF:
+			GroupL = BlastHitJoiner2(OBJL)##DEBUG
+			outS = outS + "\n############# Align hit position \n"
+			for i in GroupL:
+				TMPobjL  = []
+				for ii in i:
+					TMPobjL.append([x for x in sortedOBJL if x.qseqidS.replace("lcl|","") == ii][0])
+				
+				TMPstartI = min([min(x.sstartI, x.sendI) for x in TMPobjL])
+				TMPendI = max([max(x.sstartI, x.sendI) for x in TMPobjL])
+				outS = outS + "\n"+ str(TMPstartI) + "-" + str(TMPendI) + "\t" + ','.join(i)
+		else:
+			
+			outS = outS + "\n############# Overall Coverage not pass cut-off \n"
+		
 		
 	#STDERR(group(selectOJBL)[0])
 	return outS
@@ -460,8 +531,10 @@ opt.add_option("-i",help="*input path, get input from stdin if ommit", default='
 opt.add_option("-o",help="indicate output file name or print out as standard output",default="0")
 opt.add_option("-e",help="E-value cutoff for selected hit",default="0.1")
 opt.add_option("-c",help="query-length covery rate cutoff for selected hit",default="0.98")
+opt.add_option("-t",help="cutoff for pool protein coverage treshold",default="0.9")
 opt.add_option("--TAG",help="Spicies Tag in protein name",default="0",dest="TAG")
 opt.add_option("-q",help="*query database path",dest='q',default="DB_PATH")
+
 (options, args) = opt.parse_args()
 
 ##Documentation part
@@ -469,6 +542,7 @@ __QCovF__ = float(options.c) ;STDERR("__QCovF__ = ",__QCovF__)
 __EvalF__ = float(options.e)	;STDERR("__EvalF__ = ",__EvalF__)
 __TAG__ = options.TAG
 __DBname__ = options.q
+__TresholdF__ = float(options.t)
 
 if options.i == '0': ##get input from pipe
 	INS = sys.stdin.read()
@@ -478,10 +552,10 @@ else:#open file
 	INS = f.read()
 	f.close()
 if options.o == '0': ##print output to pipe
-	print(main2(INS))
+	print(main2(INS,__TresholdF__))
 else:#write output to a flie
 	f=open(options.o,'w')
-	f.write(Main2(INS))
+	f.write(Main2(INS,__TresholdF__))
 	f.close()	
 
 
