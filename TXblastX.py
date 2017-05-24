@@ -369,6 +369,7 @@ def BlastHitJoiner2(HitL):
 	UsedNameL = []
 	NumI = 0
 	LimitI = len(SortedHitL)
+	MergedL = []
 	while len(SortedHitL) > 0 and NumI < LimitI+1:
 		CL = SortedHitL.pop(0) ##select hit with highest bit-score to use as anchor
 		STDERR("ANCHOR=",CL.qseqidS.replace("lcl|",""))
@@ -382,12 +383,12 @@ def BlastHitJoiner2(HitL):
 		ConInL = [[CLseqS , x] for x in ToALignSL]
 		#STDERR("BlastHitJoiner.ConInL",ConInL)
 		ChkL = [x for x in ConcurrentCall(OC.overlap, ConInL, 8)]
-		PassedL = [x for x in ChkL if x.OverlapF > 0.1]
+		PassedL = [x for x in ChkL if x.OverlapF > 1.5]
 		#STDERR("BlasthitJoiner2.PassedL",[[x.SeqS0.name(),x.SeqS1.name(),x.OverlapI,x.OverlapF,x.AI] for x in PassedL]) ##DEBUG
 		MSAInL = [x.MSA(x.AI,1) for x in PassedL]
 		#STDERR("BlasthitJoiner2.MSAInL",MSAInL) ##DEBUG		
-		ChkL2 = [x for x in ConcurrentCall(MCK, [[x] for x in MSAInL], 10)]
-		NumI += 1
+		ChkL2 = [x for x in ConcurrentCall(MCK, [[x] for x in MSAInL], 10)] ##Check alignment wether it good or not
+		NumI += 1 ##endless while loop proof
 		
 	
 		#STDERR("BlastHitJoiner.ChkL2",str(ChkL2).replace("]],","\n")) ##DEBUG
@@ -395,7 +396,12 @@ def BlastHitJoiner2(HitL):
 		#break##DEBUG
 		UsedNameL.append(CL.qseqidS.replace("lcl|",""))
 		GroupL.append([CL.qseqidS.replace("lcl|","")])
-		#TMPusednameL = []
+		#STDERR("BlastHitJoiner2.len(ChkL2)=",len(ChkL2))##DEBUG
+		TMPmergedSeqS = ''
+		if len(ChkL2) > 0:
+			TMPmergedSeqS = ">" + ChkL2[0][0].nameS +"\n"+ ChkL2[0][0].SeqS.replace("-","")
+			#STDERR("BlastHitJoiner2.len(TMPmergedSeqS)=",len(TMPmergedSeqS))##DEBUG
+			#STDERR("BlastHitJoiner2.TMPmergedSeqS ORIGINAL =",TMPmergedSeqS)##DEBUG
 		for i in ChkL2: ##DEBUG
 			#STDERR("############################################################ i ########################################################") ##DEBUG
 			#STDERR(i)
@@ -410,42 +416,25 @@ def BlastHitJoiner2(HitL):
 					GroupL[-1].append(SeqNameS)
 					#TMPusednameL.append(SeqNameS)
 					UsedNameL.append(SeqNameS)
+				
+				NextSeqS = ">" + Seq1OBJ.nameS +"\n"+ Seq1OBJ.SeqS.replace("-","")
+				#STDERR("BlastHitJoiner2.FirstSeqS=",TMPmergedSeqS)##DEBUG
+				#STDERR("BlastHitJoiner2.NextSeqS=",NextSeqS)##DEBUG
+				TMPoverlap = OC.overlap(TMPmergedSeqS, NextSeqS)
+				#STDERR("BlastHitJoiner2.TMPoverlap=",TMPoverlap.OverlapL)##DEBUG
+				TMPmergedSeqS = TMPoverlap.merge()
+				STDERR("BlastHitJoiner2.len(TMPmergedSeqS)=",len(TMPmergedSeqS))##DEBUG
+				#STDERR("BlastHitJoiner2.TMPmergedSeqS=",TMPmergedSeqS)##DEBUG
 
-			
 			#STDERR("i[1][1:]=",i[1][1:]) ##DEBUG
 		SortedHitL = [x for x in SortedHitL if x.qseqidS.replace("lcl|","") not in UsedNameL]
 		SortedHitL = sorted( SortedHitL,  key = lambda x:x.bitscoreF)[::-1] ##sort by hit-bitscore
+		MergedL.append(TMPmergedSeqS)
 
 	STDERR("BlastHitJoiner.UsedNameL",UsedNameL)
 	STDERR("BlastHitJoiner.GroupL",GroupL)
-	return GroupL
-		
-		
+	return [GroupL, MergedL]
 
-def main(INS):
-	INL = (chop(INS))
-	hitOBJL = [hit(x) for x in INL]
-	#hitOBJL = [x for x in hitOBJL if TruncateCheck(x,10) == 1] ##remove truncated hit before processing
-	#if __TAG__ != '0':
-	#	selectOJBL = [x for x in hitOBJL if x.qcovsF > __QCovF__ and x.evalueF < __EvalF__]
-	selectOJBL = [x for x in hitOBJL if x.qcovsF > __QCovF__ and x.evalueF < __EvalF__]
-	
-	#selectOJBL = selectOJBL[0:1000] ##DEBUG
-	
-	STDERR([x.AttributesL for x in selectOJBL[0:2]]) ##DEBUG
-	STDERR("entering group function") ##DEBUG
-	outS = ''
-	#for OBJL in group(selectOJBL):
-	for OBJL in Pgroup(selectOJBL):
-		ScoreFL = GroupScore(OBJL)
-		sortedOBJL = sorted([x.AttributesL for x in OBJL], key=lambda x:(int(x[8]) + int(x[9]))/2 )
-		#outS = outS + '\n'.join(['\t'.join(x.AttributesL) for x in sortedOBJL]) + "\n############\n"
-		#outS = outS + '\n'.join(['\t'.join(x) for x in sortedOBJL]) + "\nPoolCovScpre=" + str(ScoreFL[1]) + "\nEachgroupedL=" + str(ScoreFL[0]) + "\n############\n"
-		TXnumS = str(len(ScoreFL[0]))
-		outS = outS + '\n'.join(['\t'.join(x) for x in sortedOBJL]) + "\nPoolCovScpre=\t" + str(ScoreFL[1]) +"\t"+ ScoreFL[0][0][1] + "\tTXnumS=\t"+TXnumS +  "\n############\n"		
-		outS = outS + str(ScoreFL[0]).replace("""],""","""]\n""") + "\n############\n"
-	#STDERR(group(selectOJBL)[0])
-	return outS
 
 def main2(INS,TresholdF):
 	INL = (chop(INS))
@@ -469,7 +458,9 @@ def main2(INS,TresholdF):
 		#STDERR("TEMPSEQ") ##DEBUG
 		#STDERR(''.join(MSAL)) ##DEBUG
 		if ScoreFL[1] > TresholdF:
-			GroupL = BlastHitJoiner2(OBJL)##DEBUG
+			MergedGroupL = BlastHitJoiner2(OBJL)##DEBUG
+			GroupL = MergedGroupL[0]
+			MergedSeqSL = sorted([x for x in MergedGroupL[1] if len(x) > 0], key=lambda x:len(x))[::-1]
 			outS = outS + "\n############# Align hit position \n"
 			#STDERR("main2.GroupL=",GroupL) ##DEBUG
 			for i in GroupL:
@@ -480,6 +471,26 @@ def main2(INS,TresholdF):
 				TMPstartI = min([min(x.sstartI, x.sendI) for x in TMPobjL])
 				TMPendI = max([max(x.sstartI, x.sendI) for x in TMPobjL])
 				outS = outS + "\n"+ str(TMPstartI) + "-" + str(TMPendI) + "\t" + ' '.join(i)
+
+			TMPmergedSeqS = ''
+			if len(MergedSeqSL) > 0:
+				TMPmergedSeqS = MergedSeqSL.pop(0)
+			numI = 0
+			limitI = len(MergedSeqSL)
+			while len(MergedSeqSL) > 0 and numI > limitI:
+				numI += 1
+				MaMergedL = [x for x in MergedSeqSL]
+				ConInL = [[TMPmergedSeqS , x] for x in MaMergedL]
+				#STDERR("BlastHitJoiner.ConInL",ConInL)
+				ChkL = [x for x in ConcurrentCall(OC.overlap, ConInL, 8)]
+				PassedL = [x.SeqS1.FastaInS for x in ChkL if x.OverlapF > 1.5]
+				for i in PassedL:
+					TMPOC = OC.overlap(TMPmergedSeqS,i).merge()
+					TMPmergedSeqS = TMPOC
+
+			
+				outS = outS + "\n###MERGED SEQ##\n"	+ TMPmergedSeqS
+
 		else:
 			
 			outS = outS + "\n############# Overall Coverage not pass cut-off \n"

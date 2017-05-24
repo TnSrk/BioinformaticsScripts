@@ -269,6 +269,7 @@ def consensusExtractKW(MSAfasta,GapWeightF,MinPF,GapIgnoreFlagI): ##MinPF = mini
 
 	return Consout
 
+
 def ConsMod2(seqS,WildCardS):
 	ModSeqS = seqS.splitlines()
 	SubS = ''.join(ModSeqS)
@@ -609,7 +610,7 @@ def MSAfastaSplit(MSAfasta):
 			xL = x.splitlines()
 			MSAfastaL2.append( [ xL[0],''.join(xL[1:]) ] )
 
-		return MSAfastaL2 ##Return 2D List [[NameS,seqS],[NameS,seqS]]
+		return MSAfastaL2 ##Return 2D List [[HeaderLine0S,seq0S],[HeaderLine1S,seq1S]]
 
 def MSACheck(MSAS): #Check consistency of MSA 
 	MSAfastaL = [x for x in MSAfastaSplit(MSAS)]
