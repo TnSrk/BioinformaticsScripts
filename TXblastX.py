@@ -2,7 +2,7 @@
 ##TXblastX.py.py
 ##Takes input from blastx with -outfmt '6 qseqid sseqid pident length mismatch gapopen qstart qend sstart send evalue bitscore slen qlen qcovs' option
 import OverlapCheck as OC
-from FNpool import ConcurrentCall, MSACheck as MCK
+from FNpool import ConcurrentCall, MSACheck as MCK, SeqsMerger
 import sys,optparse, copy, subprocess
 from concurrent.futures import ProcessPoolExecutor
 from time import sleep
@@ -383,7 +383,7 @@ def BlastHitJoiner2(HitL):
 		ConInL = [[CLseqS , x] for x in ToALignSL]
 		#STDERR("BlastHitJoiner.ConInL",ConInL)
 		ChkL = [x for x in ConcurrentCall(OC.overlap, ConInL, 8)]
-		PassedL = [x for x in ChkL if x.OverlapF > 1.5]
+		PassedL = [x for x in ChkL if x.OverlapF > 0.5]
 		#STDERR("BlasthitJoiner2.PassedL",[[x.SeqS0.name(),x.SeqS1.name(),x.OverlapI,x.OverlapF,x.AI] for x in PassedL]) ##DEBUG
 		MSAInL = [x.MSA(x.AI,1) for x in PassedL]
 		#STDERR("BlasthitJoiner2.MSAInL",MSAInL) ##DEBUG		
@@ -430,6 +430,7 @@ def BlastHitJoiner2(HitL):
 		SortedHitL = [x for x in SortedHitL if x.qseqidS.replace("lcl|","") not in UsedNameL]
 		SortedHitL = sorted( SortedHitL,  key = lambda x:x.bitscoreF)[::-1] ##sort by hit-bitscore
 		MergedL.append(TMPmergedSeqS)
+		STDERR("BlastHitJoiner.TMPmergedSeqS",TMPmergedSeqS)
 
 	STDERR("BlastHitJoiner.UsedNameL",UsedNameL)
 	STDERR("BlastHitJoiner.GroupL",GroupL)
@@ -449,6 +450,7 @@ def main2(INS,TresholdF):
 	#for OBJL in group(selectOJBL):
 	for OBJL in Pgroup(selectOJBL):
 		ScoreFL = GroupScore(OBJL)
+		CrPnameS = OBJL[0].sseqidS
 		
 		sortedOBJL = sorted( OBJL, key=lambda x:( (x.sstartI + x.sendI)/2 ,min(x.sstartI, x.sendI) ) )
 		TXnumS = str(len(ScoreFL[0]))
@@ -472,24 +474,16 @@ def main2(INS,TresholdF):
 				TMPendI = max([max(x.sstartI, x.sendI) for x in TMPobjL])
 				outS = outS + "\n"+ str(TMPstartI) + "-" + str(TMPendI) + "\t" + ' '.join(i)
 
-			TMPmergedSeqS = ''
-			if len(MergedSeqSL) > 0:
-				TMPmergedSeqS = MergedSeqSL.pop(0)
-			numI = 0
-			limitI = len(MergedSeqSL)
-			while len(MergedSeqSL) > 0 and numI > limitI:
-				numI += 1
-				MaMergedL = [x for x in MergedSeqSL]
-				ConInL = [[TMPmergedSeqS , x] for x in MaMergedL]
-				#STDERR("BlastHitJoiner.ConInL",ConInL)
-				ChkL = [x for x in ConcurrentCall(OC.overlap, ConInL, 8)]
-				PassedL = [x.SeqS1.FastaInS for x in ChkL if x.OverlapF > 1.5]
-				for i in PassedL:
-					TMPOC = OC.overlap(TMPmergedSeqS,i).merge()
-					TMPmergedSeqS = TMPOC
+
+
+			LV2MergedSeqSL = SeqsMerger(MergedSeqSL)
+			#STDERR("main2.LV2MergedSeqSL",LV2MergedSeqSL)##DEBUG
+
+			MergedSeqsS = '\n'.join(LV2MergedSeqSL[1]) + "\n"
+			STDERR("main2.LV2MergedSeqSL",LV2MergedSeqSL[0])##DEBUG
 
 			
-				outS = outS + "\n###MERGED SEQ##\n"	+ TMPmergedSeqS
+			outS = outS + "\n###MERGED SEQ for "+ CrPnameS +"##\n"	+ MergedSeqsS
 
 		else:
 			

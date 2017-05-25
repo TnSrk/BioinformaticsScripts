@@ -16,6 +16,7 @@ import sys,  subprocess, optparse, re, time
 from time import sleep
 from multiprocessing import Pool, cpu_count
 from concurrent.futures import ProcessPoolExecutor
+import OverlapCheck as OC
 
 
 def STDERR(*StrInS): #Function For Debugging
@@ -221,6 +222,44 @@ def realign(fastaMsaS):
 	#alignoutS = consensusExtract2(musclecall(alignS),0.1,0.25)
 	LongerSeq = seqonly(LongerSeq)
 	return LongerSeq
+
+def SeqsMerger(InSeqsL): # get a list of sequences then try to merge them together and output list of merged sequence(s)
+	SeqsL = sorted([FastaTool(x) for x in InSeqsL[:]], key=lambda x:x.seqlen() )
+	npI = int(cpu_count())
+	#TempMergedSeqS = ''
+	limnumI = len(SeqsL)
+	iternumI = 0
+	UsedNameL = []
+	MergedL = []
+	while len(SeqsL) > 0 and iternumI < limnumI:
+		
+		TempMergedSeqOBJ = SeqsL.pop(0)
+		UsedNameL.append(TempMergedSeqOBJ.name())
+		SeqpairInL = [[TempMergedSeqOBJ.FastaInS,x.FastaInS] for x in SeqsL]
+		ChkL = [x for x in ConcurrentCall(OC.overlap, SeqpairInL, 8,0.01)]
+		PassedL0 = [x for x in ChkL if x.OverlapF > 0.3]
+		MSAInL = [x.MSA(x.AI,1) for x in PassedL0]
+		ChkL2 = [x for x in ConcurrentCall(MSACheck, [[x] for x in MSAInL], npI)] ##Check alignment wether it good or not
+
+		for i in ChkL2: ##DEBUG
+			Seq0OBJ = i[0]
+			Seq1OBJ = i[1]
+			STDERR("SeqsMerger.Seq0OBJ=",Seq0OBJ.nameS,Seq0OBJ.FragNumI,Seq0OBJ.LargeRatioF,Seq0OBJ.SmallRatioF,Seq0OBJ.HeadGapI,Seq0OBJ.TailGapI,Seq0OBJ.GapRatioF) ##DEBUG
+			STDERR("SeqsMerger.Seq1OBJ=",Seq1OBJ.nameS,Seq1OBJ.FragNumI,Seq1OBJ.LargeRatioF,Seq1OBJ.SmallRatioF,Seq1OBJ.HeadGapI,Seq1OBJ.TailGapI,Seq1OBJ.GapRatioF) ##DEBUG
+			if Seq1OBJ.nameS not in UsedNameL and Seq0OBJ.LargeRatioF > 0.8 and Seq1OBJ.LargeRatioF > 0.8 and Seq0OBJ.GapRatioF < 0.05 and Seq1OBJ.GapRatioF < 0.05 :
+				
+				NextSeqS = ">" + Seq1OBJ.nameS +"\n"+ Seq1OBJ.SeqS.replace("-","")
+				TMPoverlap = OC.overlap(TempMergedSeqOBJ.FastaInS, NextSeqS)
+				#STDERR("BlastHitJoiner2.TMPoverlap=",TMPoverlap.OverlapL)##DEBUG
+				TempMergedSeqOBJ = FastaTool(TMPoverlap.merge())
+				STDERR("SeqsMerger.TempMergedSeqOBJ.seqlen()=",TempMergedSeqOBJ.seqlen())##DEBUG
+				#STDERR("BlastHitJoiner2.TMPmergedSeqS=",TMPmergedSeqS)##DEBUG
+				UsedNameL.append(Seq1OBJ.nameS)
+
+		iternumI += 1 ##endless while loop proof
+		MergedL.append(TempMergedSeqOBJ.FastaInS)
+
+	return [UsedNameL,MergedL]
 
 def consensusExtractKW(MSAfasta,GapWeightF,MinPF,GapIgnoreFlagI): ##MinPF = minimum percent for consensus
 

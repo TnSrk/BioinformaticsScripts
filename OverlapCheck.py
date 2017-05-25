@@ -150,10 +150,10 @@ class overlap(object):
 		
 		for i in (0,2,4,6):
 			S0remainI = S0lenI - OverlapL[i+1]
-			matchF0 = abs( (float(self.dfL[i])/S1lenI) + (float(self.dfL[i+1])/S0lenI) )  ## Calculate difference between match postition end of both sequences
-			if OverlapL[i] != -1 and (2.0 - matchF0) > matchF:
+			matchF0 = max( (float(self.dfL[i])/S1lenI), (float(self.dfL[i+1])/S0lenI) )  ## Calculate difference between match postition end of both sequences
+			if OverlapL[i] != -1 and OverlapL[i+1] != -1 and (1.0 - matchF0) > matchF:
 				matchI = min(OverlapL[i],OverlapL[i+1])
-				matchF = 2.0 - matchF0 #higher the matchF differ the difference
+				matchF = 1.0 - matchF0 #higher the matchF differ the difference
 				AI = i
 
 		self.OverlapI = matchI
