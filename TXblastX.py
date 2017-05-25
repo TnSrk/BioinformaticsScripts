@@ -3,7 +3,7 @@
 ##Takes input from blastx with -outfmt '6 qseqid sseqid pident length mismatch gapopen qstart qend sstart send evalue bitscore slen qlen qcovs' option
 import OverlapCheck as OC
 from FNpool import ConcurrentCall, MSACheck as MCK, SeqsMerger
-import sys,optparse, copy, subprocess
+import sys,optparse, copy, subprocess, re
 from concurrent.futures import ProcessPoolExecutor
 from time import sleep
 ### Class And Function
@@ -430,7 +430,7 @@ def BlastHitJoiner2(HitL):
 		SortedHitL = [x for x in SortedHitL if x.qseqidS.replace("lcl|","") not in UsedNameL]
 		SortedHitL = sorted( SortedHitL,  key = lambda x:x.bitscoreF)[::-1] ##sort by hit-bitscore
 		MergedL.append(TMPmergedSeqS)
-		STDERR("BlastHitJoiner.TMPmergedSeqS",TMPmergedSeqS)
+		#STDERR("BlastHitJoiner.TMPmergedSeqS",TMPmergedSeqS)
 
 	STDERR("BlastHitJoiner.UsedNameL",UsedNameL)
 	STDERR("BlastHitJoiner.GroupL",GroupL)
@@ -454,8 +454,8 @@ def main2(INS,TresholdF):
 		
 		sortedOBJL = sorted( OBJL, key=lambda x:( (x.sstartI + x.sendI)/2 ,min(x.sstartI, x.sendI) ) )
 		TXnumS = str(len(ScoreFL[0]))
-		outS = outS + '\n'.join(['\t'.join((x.AttributesL)) for x in sortedOBJL]) + "\nPoolCovScpre=\t" + str(ScoreFL[1]) +"\t"+ ScoreFL[0][0][1] + "\tTXnumS=\t"+TXnumS +  "\n############\n"		
-		outS = outS + str(ScoreFL[0]).replace("""],""","""]\n""") + "\n############\n"
+		outS = outS + "#" + '\n#'.join(['\t'.join((x.AttributesL)) for x in sortedOBJL]) + "\nPoolCovScpre=\t" + str(ScoreFL[1]) +"\t"+ ScoreFL[0][0][1] + "\tTXnumS=\t"+TXnumS +  "\n############\n"		
+		outS = outS + "#" + str(ScoreFL[0]).replace("""],""","""]\n""") + "\n############\n"
 		##tempolary marked ##MSAL = [ x.decode('utf-8') for x in BlastXHitGroup(OBJL,0.98,0) ]
 		#STDERR("TEMPSEQ") ##DEBUG
 		#STDERR(''.join(MSAL)) ##DEBUG
@@ -472,14 +472,14 @@ def main2(INS,TresholdF):
 				
 				TMPstartI = min([min(x.sstartI, x.sendI) for x in TMPobjL])
 				TMPendI = max([max(x.sstartI, x.sendI) for x in TMPobjL])
-				outS = outS + "\n"+ str(TMPstartI) + "-" + str(TMPendI) + "\t" + ' '.join(i)
+				outS = outS + "\n#"+ str(TMPstartI) + "-" + str(TMPendI) + "\t" + ' '.join(i)
 
 
 
 			LV2MergedSeqSL = SeqsMerger(MergedSeqSL)
-			#STDERR("main2.LV2MergedSeqSL",LV2MergedSeqSL)##DEBUG
+			STDERR("main2.LV2MergedSeqSL[0]",LV2MergedSeqSL[0])##DEBUG
 
-			MergedSeqsS = '\n'.join(LV2MergedSeqSL[1]) + "\n"
+			MergedSeqsS = '\n'.join([x.splitlines()[0] +" "+ CrPnameS +'\n'+ '\n'.join(x.splitlines()[1:]) for x in LV2MergedSeqSL[1]]) + "\n"
 			STDERR("main2.LV2MergedSeqSL",LV2MergedSeqSL[0])##DEBUG
 
 			
