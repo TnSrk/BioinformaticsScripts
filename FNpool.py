@@ -16,7 +16,7 @@ import sys,  subprocess, optparse, re, time
 from time import sleep
 from multiprocessing import Pool, cpu_count
 from concurrent.futures import ProcessPoolExecutor
-import OverlapCheck as OC
+#import OverlapCheck as OC
 
 
 def STDERR(*StrInS): #Function For Debugging
@@ -223,7 +223,7 @@ def realign(fastaMsaS):
 	LongerSeq = seqonly(LongerSeq)
 	return LongerSeq
 
-def SeqsMerger(InSeqsL): # get a list of sequences then try to merge them together and output list of merged sequence(s)
+def SeqsMergerOri(InSeqsL): # get a list of sequences then try to merge them together and output list of merged sequence(s)
 	SeqsL = sorted([FastaTool(x) for x in InSeqsL[:]], key=lambda x:x.seqlen() )
 	npI = int(cpu_count())
 	#TempMergedSeqS = ''
@@ -246,7 +246,7 @@ def SeqsMerger(InSeqsL): # get a list of sequences then try to merge them togeth
 			Seq1OBJ = i[1]
 			STDERR("SeqsMerger.Seq0OBJ=",Seq0OBJ.nameS,Seq0OBJ.FragNumI,Seq0OBJ.LargeRatioF,Seq0OBJ.SmallRatioF,Seq0OBJ.HeadGapI,Seq0OBJ.TailGapI,Seq0OBJ.GapRatioF) ##DEBUG
 			STDERR("SeqsMerger.Seq1OBJ=",Seq1OBJ.nameS,Seq1OBJ.FragNumI,Seq1OBJ.LargeRatioF,Seq1OBJ.SmallRatioF,Seq1OBJ.HeadGapI,Seq1OBJ.TailGapI,Seq1OBJ.GapRatioF) ##DEBUG
-			if Seq1OBJ.nameS not in UsedNameL and Seq0OBJ.LargeRatioF > 0.8 and Seq1OBJ.LargeRatioF > 0.8 and Seq0OBJ.GapRatioF < 0.05 and Seq1OBJ.GapRatioF < 0.05 :
+			if Seq1OBJ.nameS not in UsedNameL and Seq0OBJ.LargeRatioF > 0.8 and (Seq1OBJ.LargeRatioF + Seq0OBJ.SmallRatioF) > 0.8 and Seq0OBJ.GapRatioF < 0.05 and Seq1OBJ.GapRatioF < 0.05 :
 				
 				NextSeqS = ">" + Seq1OBJ.nameS +"\n"+ Seq1OBJ.SeqS.replace("-","")
 				TMPoverlap = OC.overlap(TempMergedSeqOBJ.FastaInS, NextSeqS)
@@ -661,9 +661,11 @@ class MSAQual(object): #Take a line of alignment in fasta format then return ali
 	def __init__(self,OneFastaMSAS):
 		self.OneFastaMSAS = OneFastaMSAS
 		self.nameS = OneFastaMSAS[0].replace(">","").split()[0].replace("lcl|","")
-		self.SeqS = OneFastaMSAS[1]		
+		self.SeqS = OneFastaMSAS[1]	
+		self.SeqlenI = len(self.SeqS.replace('-',''))	
 		self.alignLenI, self.AllGapI, self.HeadGapI, self.TailGapI, self.InnerGapI, self.GapOpenI, self.FragNumI, self.LargeRatioF, self.SmallRatioF = self.AlignScore(self.SeqS)
 		self.GapRatioF = self.InnerGapI/len(self.SeqS)
+		
 	
 	def AlignScore(self,Seqs):
 		alignLenI = len(Seqs)
@@ -674,8 +676,8 @@ class MSAQual(object): #Take a line of alignment in fasta format then return ali
 		GapOpenI = len([x for x in Seqs.strip("-").split("-") if len(x) > 0]) - 1 #count inner gap opening in alignment
 		FragmentL = sorted([x for x in re.sub('\-+','-',Seqs).split('-') if len(x) != 0], key=lambda x:len(x))
 		FragNumI = len(FragmentL)
-		LargeRatioF = len(FragmentL[-1])/alignLenI
-		SmallRatioF = len(FragmentL[0])/alignLenI
+		LargeRatioF = len(FragmentL[-1])/self.SeqlenI
+		SmallRatioF = len(FragmentL[0])/self.SeqlenI
 		if SmallRatioF == LargeRatioF:
 			SmallRatioF = 0.0
 		scoredL = [alignLenI, AllGapI, HeadGapI, TailGapI, InnerGapI, GapOpenI, FragNumI, LargeRatioF, SmallRatioF]

@@ -1,17 +1,9 @@
 ##OverlapCheck.py
 import optparse
-from FNpool import  getSseq, seqonly, FastaTool, musclecall, ConcurrentCall, consensusExtractKW, STDERR
-from FNpool import OverlapCheck2 as OverlapCheck
+from FNpool import getSseq,seqonly, FastaTool, musclecall, ConcurrentCall, consensusExtractKW, STDERR, OverlapCheck2 as OverlapCheck
 import sys
 
 class overlap(object):
-
-	#def __init__(self,DBnameS,SeqS0_IDS,SeqS1_IDS):
-	#	self.DBnameS = DBnameS
-	#	self.SeqS0_IDS = SeqS0_IDS
-	#	self.SeqS1_IDS = SeqS1_IDS
-	#	self.SeqS0 = getSseq(self.DBnameS,self.SeqS0_IDS,'1')
-	#	self.SeqS1 = getSseq(self.DBnameS,self.SeqS1_IDS,'1')
 
 	def __init__(self,SeqS0,SeqS1,*arg):
 		self.SeqS0 = FastaTool(SeqS0)
@@ -139,9 +131,11 @@ class overlap(object):
 			OverlapL = self.OverlapCall1(arg[0])
 
 		self.T0_H1_OvI, self.H1_T0_OvI, self.T0_T1_OvI, self.T1_T0_OvI, self.T1_H0_OvI, self.H0_T1_OvI, self.H1_H0_OvI, self.H0_H1_OvI = OverlapL
-		S0lenI = self.SeqS0.seqlen()
-		S1lenI = self.SeqS1.seqlen()
-		self.dfL = [S1lenI -  self.T0_H1_OvI, S0lenI - self.H1_T0_OvI, S1lenI - self.T0_T1_OvI, S0lenI - self.T1_T0_OvI, S0lenI - self.T1_H0_OvI, S1lenI - self.H0_T1_OvI, S0lenI - self.H1_H0_OvI, S1lenI - self.H0_H1_OvI]
+		S0lenF = self.SeqS0.seqlen()*1.0
+		S1lenF = self.SeqS1.seqlen()*1.0
+		#self.dfL = [S1lenI -  self.T0_H1_OvI, S0lenI - self.H1_T0_OvI, S1lenI - self.T0_T1_OvI, S0lenI - self.T1_T0_OvI, S0lenI - self.T1_H0_OvI, S1lenI - self.H0_T1_OvI, S0lenI - self.H1_H0_OvI, S1lenI - self.H0_H1_OvI]
+		self.dfD = {'0':(S1lenF -  self.T0_H1_OvI*1.0)/S1lenF, '1':(S0lenF - self.H1_T0_OvI*1.0)/S0lenF, '2':(S1lenF - self.T0_T1_OvI*1.0)/S1lenF, '3':(S0lenF - self.T1_T0_OvI*1.0)/S0lenF, '4':(S0lenF - self.T1_H0_OvI*1.0)/S0lenF, '5':(S1lenF - self.H0_T1_OvI*1.0)/S1lenF, '6':(S0lenF - self.H1_H0_OvI*1.0)/S0lenF, '7':(S1lenF - self.H0_H1_OvI*1.0)/S1lenF}
+		
 		#RemainIL = [self.SeqS0.seqlen() - self.T0_H1_OvI, ]
 
 		matchI = -1
@@ -149,11 +143,10 @@ class overlap(object):
 		AI = -1
 		
 		for i in (0,2,4,6):
-			S0remainI = S0lenI - OverlapL[i+1]
-			matchF0 = max( (float(self.dfL[i])/S1lenI), (float(self.dfL[i+1])/S0lenI) )  ## Calculate difference between match postition end of both sequences
-			if OverlapL[i] != -1 and OverlapL[i+1] != -1 and (1.0 - matchF0) > matchF:
+			matchF0 = max( self.dfD[str(i)], self.dfD[str(i+1)])  ## Calculate difference between match postition end of both sequences
+			if OverlapL[i] != -1 and OverlapL[i+1] != -1 and matchF0 > matchF:
 				matchI = min(OverlapL[i],OverlapL[i+1])
-				matchF = 1.0 - matchF0 #higher the matchF differ the difference
+				matchF = matchF0 #higher the matchF differ the difference
 				AI = i
 
 		self.OverlapI = matchI
@@ -193,7 +186,7 @@ class overlap(object):
 			MSAS = musclecall(">S1_REV\n"+SeqS1R+"\n>S0_FWD\n"+SeqS0F,AlignTagI)
 
 		if len(arg) == 1 and arg[0] == 1:
-			#STDERR("##########MSA=",MSAS) ##DEBUG
+			STDERR("##########MSA=",MSAS) ##DEBUG
 			MSASL = [">"+x for x in MSAS.split(">") if len(x) > 3]
 			FirstSeq = [x for x in MSASL if x.find("S0_") != -1][0]
 			SecondSeq = [x for x in MSASL if x.find("S1_") != -1][0]
@@ -203,6 +196,9 @@ class overlap(object):
 		return MSAS
 
 	def merge(self):
+		STDERR("+++++++++++++ merge INPUT +++++++++++++++++") ##DEBUG
+		
+		
 		mergedS = ">merged_" + self.SeqS0.name() +"_"+ self.SeqS1.name() + "\n" + consensusExtractKW(self.MSA(self.AI, 1),0,0,0)
 		return(mergedS)
 
@@ -216,6 +212,7 @@ def main():
 	opt.add_option("-d",help="sequences database path")
 	opt.add_option("-1",help="1st sequnce ID",dest="a")
 	opt.add_option("-2",help="2nd sequnce ID",dest="b")
+	opt.add_option("-i",help="read input from a file, which contains exactly 2 sequences",dest="i")
 	opt.add_option("-A","--align",help="output alignment in specific orientation",dest="AlignNumI",default="-1")
 	opt.add_option("-t","--threads",help="cpu number to use",dest='t',default="1")
 	opt.add_option("--merge",help="output merged sequence",dest='merge',default="F")
@@ -223,9 +220,32 @@ def main():
 	(options, args) = opt.parse_args()
 
 	DBnameS, SeqS0_IDS, SeqS1_IDS, cpuNumI, AlignNumI, mergeS, conservedS = options.d, options.a, options.b, int(options.t), int(options.AlignNumI), options.merge, options.conserved
-	if None in [DBnameS, SeqS0_IDS, SeqS1_IDS]:
+	FnameS = options.i
+	if None in [DBnameS, SeqS0_IDS, SeqS1_IDS] and FnameS == None:
 		print("missing variable")
 		print(usage) 
+	elif None in [DBnameS, SeqS0_IDS, SeqS1_IDS] and FnameS != None:
+		if FnameS == '-':
+			FastaInS = sys.stdin.read()
+		else:
+			f = open(FnameS,'r')
+			FastaInS = f.read()
+			f.close()
+
+		FastaInL = [">"+x for x in FastaInS.split(">") if len(x) > 3]
+		SeqS0 = FastaInL[0]
+		SeqS1 = FastaInL[1]
+		overlapL = overlap(SeqS0,SeqS1,cpuNumI)
+		print("#","len(SeqS0)="+ str(overlapL.SeqS0.seqlen())) 
+		print("#","len(SeqS1)="+ str(overlapL.SeqS1.seqlen()))
+		print("#",overlapL.OverlapL)
+		print("# dfL=",overlapL.dfL)		
+		print("#",overlapL.OverlapI)
+		print("#",overlapL.OverlapF)
+		print("#",overlapL.AI)
+		#if overlapL.AI >= 0 and AlignNumI == -1:
+		
+	
 	else:
 		
 		SeqS0 = getSseq(DBnameS,SeqS0_IDS,'1')

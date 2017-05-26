@@ -2,7 +2,8 @@
 ##TXblastX.py.py
 ##Takes input from blastx with -outfmt '6 qseqid sseqid pident length mismatch gapopen qstart qend sstart send evalue bitscore slen qlen qcovs' option
 import OverlapCheck as OC
-from FNpool import ConcurrentCall, MSACheck as MCK, SeqsMerger
+import SeqsMerger
+from FNpool import ConcurrentCall, MSACheck as MCK, FastaTool
 import sys,optparse, copy, subprocess, re
 from concurrent.futures import ProcessPoolExecutor
 from time import sleep
@@ -234,7 +235,7 @@ def musclecall(SeqS):
 	#STDERR("musclecallCLW IS RUNNING")
 	return x.decode("utf-8")
 
-class FastaTool(object): ## class for manipulate sequences in fasta format
+class FastaTool0(object): ## class for manipulate sequences in fasta format
 	def __init__(self,FastaInS):
 		self.FastaInS = FastaInS
 		self.seqLenI = self.seqlen()
@@ -410,21 +411,23 @@ def BlastHitJoiner2(HitL):
 			STDERR("Seq0OBJ.name=",Seq0OBJ.nameS,Seq0OBJ.FragNumI,Seq0OBJ.LargeRatioF,Seq0OBJ.SmallRatioF,Seq0OBJ.HeadGapI,Seq0OBJ.TailGapI,Seq0OBJ.GapRatioF) ##DEBUG
 			STDERR("Seq1OBJ.name=",Seq1OBJ.nameS,Seq1OBJ.FragNumI,Seq1OBJ.LargeRatioF,Seq1OBJ.SmallRatioF,Seq1OBJ.HeadGapI,Seq1OBJ.TailGapI,Seq1OBJ.GapRatioF) ##DEBUG
 			if Seq0OBJ.FragNumI < 3 and Seq1OBJ.FragNumI < 3 and Seq0OBJ.GapRatioF < 0.1 and Seq1OBJ.GapRatioF < 0.1:
-				SeqNameS = Seq1OBJ.nameS
 				
-				if SeqNameS not in UsedNameL:
-					GroupL[-1].append(SeqNameS)
-					#TMPusednameL.append(SeqNameS)
-					UsedNameL.append(SeqNameS)
-				
+									
 				NextSeqS = ">" + Seq1OBJ.nameS +"\n"+ Seq1OBJ.SeqS.replace("-","")
-				#STDERR("BlastHitJoiner2.FirstSeqS=",TMPmergedSeqS)##DEBUG
-				#STDERR("BlastHitJoiner2.NextSeqS=",NextSeqS)##DEBUG
+				STDERR("BlastHitJoiner2.FirstSeqS=",TMPmergedSeqS)##DEBUG
+				STDERR("BlastHitJoiner2.NextSeqS=",NextSeqS)##DEBUG
 				TMPoverlap = OC.overlap(TMPmergedSeqS, NextSeqS)
-				#STDERR("BlastHitJoiner2.TMPoverlap=",TMPoverlap.OverlapL)##DEBUG
-				TMPmergedSeqS = TMPoverlap.merge()
-				STDERR("BlastHitJoiner2.len(TMPmergedSeqS)=",len(TMPmergedSeqS))##DEBUG
-				#STDERR("BlastHitJoiner2.TMPmergedSeqS=",TMPmergedSeqS)##DEBUG
+				STDERR("BlastHitJoiner2.TMPoverlap=",TMPoverlap.OverlapL)##DEBUG
+				ConsenseusSOBJ = FastaTool(TMPoverlap.conservedblock())
+				if ConsenseusSOBJ.seqonly().count("N")/ConsenseusSOBJ.seqlen() < __NlimitF__:
+					TMPmergedSeqS = TMPoverlap.merge()
+					STDERR("BlastHitJoiner2.len(TMPmergedSeqS)=",len(TMPmergedSeqS))##DEBUG
+					#STDERR("BlastHitJoiner2.TMPmergedSeqS=",TMPmergedSeqS)##DEBUG
+					SeqNameS = Seq1OBJ.nameS
+					if SeqNameS not in UsedNameL:
+						GroupL[-1].append(SeqNameS)
+						#TMPusednameL.append(SeqNameS)
+						UsedNameL.append(SeqNameS)
 
 			#STDERR("i[1][1:]=",i[1][1:]) ##DEBUG
 		SortedHitL = [x for x in SortedHitL if x.qseqidS.replace("lcl|","") not in UsedNameL]
@@ -451,6 +454,7 @@ def main2(INS,TresholdF):
 	for OBJL in Pgroup(selectOJBL):
 		ScoreFL = GroupScore(OBJL)
 		CrPnameS = OBJL[0].sseqidS
+		STDERR("Subject ID =",CrPnameS)
 		
 		sortedOBJL = sorted( OBJL, key=lambda x:( (x.sstartI + x.sendI)/2 ,min(x.sstartI, x.sendI) ) )
 		TXnumS = str(len(ScoreFL[0]))
@@ -473,8 +477,6 @@ def main2(INS,TresholdF):
 				TMPstartI = min([min(x.sstartI, x.sendI) for x in TMPobjL])
 				TMPendI = max([max(x.sstartI, x.sendI) for x in TMPobjL])
 				outS = outS + "\n#"+ str(TMPstartI) + "-" + str(TMPendI) + "\t" + ' '.join(i)
-
-
 
 			LV2MergedSeqSL = SeqsMerger(MergedSeqSL)
 			STDERR("main2.LV2MergedSeqSL[0]",LV2MergedSeqSL[0])##DEBUG
@@ -502,6 +504,7 @@ opt.add_option("-e",help="E-value cutoff for selected hit",default="0.1")
 opt.add_option("-c",help="query-length covery rate cutoff for selected hit",default="0.98")
 opt.add_option("-t",help="cutoff for pool protein coverage treshold",default="0.9")
 opt.add_option("--TAG",help="Spicies Tag in protein name",default="0",dest="TAG")
+opt.add_option("--NlimitF",help="Maximum N ration in Consensus 0.0 to 1.0",default="0.05",dest="NlimitF")
 opt.add_option("-q",help="*query database path",dest='q',default="DB_PATH")
 
 (options, args) = opt.parse_args()
@@ -512,6 +515,7 @@ __EvalF__ = float(options.e)	;STDERR("__EvalF__ = ",__EvalF__)
 __TAG__ = options.TAG
 __DBname__ = options.q
 __TresholdF__ = float(options.t)
+__NlimitF__ = float(options.NlimitF)
 
 if options.i == '0': ##get input from pipe
 	INS = sys.stdin.read()
