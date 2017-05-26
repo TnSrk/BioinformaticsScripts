@@ -2,7 +2,7 @@
 ##TXblastX.py.py
 ##Takes input from blastx with -outfmt '6 qseqid sseqid pident length mismatch gapopen qstart qend sstart send evalue bitscore slen qlen qcovs' option
 import OverlapCheck as OC
-import SeqsMerger
+from SeqsMerger import SeqsMerger
 from FNpool import ConcurrentCall, MSACheck as MCK, FastaTool
 import sys,optparse, copy, subprocess, re
 from concurrent.futures import ProcessPoolExecutor
@@ -458,7 +458,7 @@ def main2(INS,TresholdF):
 		
 		sortedOBJL = sorted( OBJL, key=lambda x:( (x.sstartI + x.sendI)/2 ,min(x.sstartI, x.sendI) ) )
 		TXnumS = str(len(ScoreFL[0]))
-		outS = outS + "#" + '\n#'.join(['\t'.join((x.AttributesL)) for x in sortedOBJL]) + "\nPoolCovScpre=\t" + str(ScoreFL[1]) +"\t"+ ScoreFL[0][0][1] + "\tTXnumS=\t"+TXnumS +  "\n############\n"		
+		outS = outS + "#" + '\n#'.join(['\t'.join((x.AttributesL)) for x in sortedOBJL]) + "\n#PoolCovScpre=\t" + str(ScoreFL[1]) +"\t"+ ScoreFL[0][0][1] + "\tTXnumS=\t"+TXnumS +  "\n############\n"		
 		outS = outS + "#" + str(ScoreFL[0]).replace("""],""","""]\n""") + "\n############\n"
 		##tempolary marked ##MSAL = [ x.decode('utf-8') for x in BlastXHitGroup(OBJL,0.98,0) ]
 		#STDERR("TEMPSEQ") ##DEBUG
@@ -491,7 +491,9 @@ def main2(INS,TresholdF):
 			
 			outS = outS + "\n############# Overall Coverage not pass cut-off \n"
 		
-		
+		if __OutTag__ == '0':
+			print(outS)
+			outS = ''
 	#STDERR(group(selectOJBL)[0])
 	return outS
 
@@ -516,6 +518,7 @@ __TAG__ = options.TAG
 __DBname__ = options.q
 __TresholdF__ = float(options.t)
 __NlimitF__ = float(options.NlimitF)
+__OutTag__ = options.o 
 
 if options.i == '0': ##get input from pipe
 	INS = sys.stdin.read()
@@ -524,7 +527,7 @@ else:#open file
 	f=open(options.i,'r')
 	INS = f.read()
 	f.close()
-if options.o == '0': ##print output to pipe
+if __OutTag__ == '0': ##print output to pipe
 	print(main2(INS,__TresholdF__))
 else:#write output to a flie
 	f=open(options.o,'w')
