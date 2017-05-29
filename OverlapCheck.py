@@ -203,7 +203,7 @@ class overlap(object):
 		return(mergedS)
 
 	def conservedblock(self):
-		conS = ">ConservedBlock " + self.SeqS0.name() +"_"+ self.SeqS1.name() + "\n" + consensusExtractKW(self.MSA(self.AI, 1),1,1,0)
+		conS = ">ConservedBlock " + self.SeqS0.name() +"_"+ self.SeqS1.name() + "\n" + sorted( consensusExtractKW(self.MSA(self.AI, 1),2,1,0).split("--"), key=lambda x:len(x))[-1] ##GAP WEIGHT INCREASED
 		return(conS)
 
 def main():

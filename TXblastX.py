@@ -403,6 +403,8 @@ def BlastHitJoiner2(HitL):
 			TMPmergedSeqS = ">" + ChkL2[0][0].nameS +"\n"+ ChkL2[0][0].SeqS.replace("-","")
 			#STDERR("BlastHitJoiner2.len(TMPmergedSeqS)=",len(TMPmergedSeqS))##DEBUG
 			#STDERR("BlastHitJoiner2.TMPmergedSeqS ORIGINAL =",TMPmergedSeqS)##DEBUG
+		else:
+			TMPmergedSeqS = CLseqS
 		for i in ChkL2: ##DEBUG
 			#STDERR("############################################################ i ########################################################") ##DEBUG
 			#STDERR(i)
@@ -410,7 +412,8 @@ def BlastHitJoiner2(HitL):
 			Seq1OBJ = i[1]
 			STDERR("Seq0OBJ.name=",Seq0OBJ.nameS,Seq0OBJ.FragNumI,Seq0OBJ.LargeRatioF,Seq0OBJ.SmallRatioF,Seq0OBJ.HeadGapI,Seq0OBJ.TailGapI,Seq0OBJ.GapRatioF) ##DEBUG
 			STDERR("Seq1OBJ.name=",Seq1OBJ.nameS,Seq1OBJ.FragNumI,Seq1OBJ.LargeRatioF,Seq1OBJ.SmallRatioF,Seq1OBJ.HeadGapI,Seq1OBJ.TailGapI,Seq1OBJ.GapRatioF) ##DEBUG
-			if Seq0OBJ.FragNumI < 3 and Seq1OBJ.FragNumI < 3 and Seq0OBJ.GapRatioF < 0.1 and Seq1OBJ.GapRatioF < 0.1:
+			#if Seq0OBJ.FragNumI < 3 and Seq1OBJ.FragNumI < 3 and Seq0OBJ.GapRatioF < 0.1 and Seq1OBJ.GapRatioF < 0.1:
+			if Seq1OBJ.nameS not in UsedNameL and  Seq0OBJ.LargeRatioF > 0.9 and Seq1OBJ.LargeRatioF > 0.9 :
 				
 									
 				NextSeqS = ">" + Seq1OBJ.nameS +"\n"+ Seq1OBJ.SeqS.replace("-","")
@@ -467,6 +470,7 @@ def main2(INS,TresholdF):
 			MergedGroupL = BlastHitJoiner2(OBJL)##DEBUG
 			GroupL = MergedGroupL[0]
 			MergedSeqSL = sorted([x for x in MergedGroupL[1] if len(x) > 0], key=lambda x:len(x))[::-1]
+			STDERR("main2.MergedSeqSL",MergedSeqSL) ##DEBUG
 			outS = outS + "\n############# Align hit position \n"
 			#STDERR("main2.GroupL=",GroupL) ##DEBUG
 			for i in GroupL:
@@ -506,7 +510,7 @@ opt.add_option("-e",help="E-value cutoff for selected hit",default="0.1")
 opt.add_option("-c",help="query-length covery rate cutoff for selected hit",default="0.98")
 opt.add_option("-t",help="cutoff for pool protein coverage treshold",default="0.9")
 opt.add_option("--TAG",help="Spicies Tag in protein name",default="0",dest="TAG")
-opt.add_option("--NlimitF",help="Maximum N ration in Consensus 0.0 to 1.0",default="0.05",dest="NlimitF")
+opt.add_option("--NlimitF",help="Maximum N ratio allowed in Consensus 0.0 to 1.0",default="0.05",dest="NlimitF")
 opt.add_option("-q",help="*query database path",dest='q',default="DB_PATH")
 
 (options, args) = opt.parse_args()
@@ -514,11 +518,11 @@ opt.add_option("-q",help="*query database path",dest='q',default="DB_PATH")
 ##Documentation part
 __QCovF__ = float(options.c) ;STDERR("__QCovF__ = ",__QCovF__)
 __EvalF__ = float(options.e)	;STDERR("__EvalF__ = ",__EvalF__)
-__TAG__ = options.TAG
-__DBname__ = options.q
-__TresholdF__ = float(options.t)
-__NlimitF__ = float(options.NlimitF)
-__OutTag__ = options.o 
+__TAG__ = options.TAG ;STDERR("__TAG__ = ",__TAG__)
+__DBname__ = options.q ;STDERR("__DBname__ = ",__DBname__)
+__TresholdF__ = float(options.t) ;STDERR("__TresholdF__ = ",__TresholdF__)
+__NlimitF__ = float(options.NlimitF) ;STDERR("__NlimitF__ = ",__NlimitF__)
+__OutTag__ = options.o ;STDERR("__OutTag__",__OutTag__)
 
 if options.i == '0': ##get input from pipe
 	INS = sys.stdin.read()

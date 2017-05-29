@@ -664,7 +664,7 @@ class MSAQual(object): #Take a line of alignment in fasta format then return ali
 		self.SeqS = OneFastaMSAS[1]	
 		self.SeqlenI = len(self.SeqS.replace('-',''))	
 		self.alignLenI, self.AllGapI, self.HeadGapI, self.TailGapI, self.InnerGapI, self.GapOpenI, self.FragNumI, self.LargeRatioF, self.SmallRatioF = self.AlignScore(self.SeqS)
-		self.GapRatioF = self.InnerGapI/len(self.SeqS)
+		self.GapRatioF = float(self.InnerGapI)/float(len(self.SeqS))
 		
 	
 	def AlignScore(self,Seqs):
