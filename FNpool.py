@@ -668,7 +668,7 @@ class MSAQual(object): #Take a line of alignment in fasta format then return ali
 		
 	
 	def AlignScore(self,Seqs):
-		alignLenI = len(Seqs)
+		alignLenI = len(Seqs.replace('-',''))
 		AllGapI = Seqs.count("-")
 		HeadGapI = alignLenI - len(Seqs.lstrip("-")) #count lead gap in alignment
 		TailGapI = alignLenI - len(Seqs.rstrip("-")) #count tail gap in alignment
@@ -678,6 +678,9 @@ class MSAQual(object): #Take a line of alignment in fasta format then return ali
 		FragNumI = len(FragmentL)
 		LargeRatioF = len(FragmentL[-1])/self.SeqlenI
 		SmallRatioF = len(FragmentL[0])/self.SeqlenI
+		N50F = 0.0
+		for i in FragmentL:
+			
 		if SmallRatioF == LargeRatioF:
 			SmallRatioF = 0.0
 		scoredL = [alignLenI, AllGapI, HeadGapI, TailGapI, InnerGapI, GapOpenI, FragNumI, LargeRatioF, SmallRatioF]

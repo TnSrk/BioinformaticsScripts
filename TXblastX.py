@@ -458,6 +458,7 @@ def main2(INS,TresholdF):
 		ScoreFL = GroupScore(OBJL)
 		CrPnameS = OBJL[0].sseqidS
 		STDERR("Subject ID =",CrPnameS)
+		outS = outS + "\n#Grouping Sequences For "+ CrPnameS + "\n"
 		
 		sortedOBJL = sorted( OBJL, key=lambda x:( (x.sstartI + x.sendI)/2 ,min(x.sstartI, x.sendI) ) )
 		TXnumS = str(len(ScoreFL[0]))
@@ -485,7 +486,7 @@ def main2(INS,TresholdF):
 			LV2MergedSeqSL = SeqsMerger(MergedSeqSL)
 			STDERR("main2.LV2MergedSeqSL[0]",LV2MergedSeqSL[0])##DEBUG
 
-			MergedSeqsS = '\n'.join([x.splitlines()[0] +" "+ CrPnameS +'\n'+ '\n'.join(x.splitlines()[1:]) for x in LV2MergedSeqSL[1]]) + "\n"
+			MergedSeqsS = '\n'.join([x.splitlines()[0].split()[0] +" "+ CrPnameS +'\n'+ '\n'.join(x.splitlines()[1:]) for x in LV2MergedSeqSL[1]]) + "\n"
 			STDERR("main2.LV2MergedSeqSL",LV2MergedSeqSL[0])##DEBUG
 
 			
