@@ -128,9 +128,9 @@ class FastaTool(object): ## class for manipulate sequences in fasta format
 		return NameS
 
 	def ManyLines(self,widthI):
-		seqS = self.seqonly()
-		seqLineI = len(seqS)/widthI
+		seqS = self.seqonly()		
 		remainsI = len(seqS)%widthI
+		seqLineI = int((len(seqS) - remainsI)/widthI)
 		#TEMPseqS = self.header()+"\n"
 		TEMPseqS = ''
 		for i in range(seqLineI):
@@ -558,6 +558,18 @@ def getSseq(DBname,Scontigname,Direction):
 	del process
 	return  TEMPseqs
 
+def getSseq2(DBname,Scontigname,Direction):
+	arg = "blastdbcmd -db "+DBname+" -entry "+Scontigname+" ;"  
+	if Direction == '2':   
+		arg = "blastdbcmd -db "+DBname+" -entry "+Scontigname+" -strand minus;"    
+                
+	process = subprocess.Popen(arg, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+	x = process.communicate()
+	TEMPseqs = x[0].decode()
+	#sys.stderr.write(str(x[1])) ##DEBUG
+	del process
+	return  TEMPseqs
+
 def musclecall(SeqS,*arg):
 	AlignTagI = 0
 	argS = "muscle -maxiters 32 -quiet"
@@ -663,27 +675,33 @@ class MSAQual(object): #Take a line of alignment in fasta format then return ali
 		self.nameS = OneFastaMSAS[0].replace(">","").split()[0].replace("lcl|","")
 		self.SeqS = OneFastaMSAS[1]	
 		self.SeqlenI = len(self.SeqS.replace('-',''))	
-		self.alignLenI, self.AllGapI, self.HeadGapI, self.TailGapI, self.InnerGapI, self.GapOpenI, self.FragNumI, self.LargeRatioF, self.SmallRatioF = self.AlignScore(self.SeqS)
+		#self.alignLenI, self.AllGapI, self.HeadGapI, self.TailGapI, self.InnerGapI, self.GapOpenI, self.FragNumI, self.LargeRatioF, self.SmallRatioF, self.N50F = self.AlignScore(self.SeqS)
+		self.AlignScore(self.SeqS)
 		self.GapRatioF = float(self.InnerGapI)/float(len(self.SeqS))
 		
 	
 	def AlignScore(self,Seqs):
-		alignLenI = len(Seqs.replace('-',''))
-		AllGapI = Seqs.count("-")
-		HeadGapI = alignLenI - len(Seqs.lstrip("-")) #count lead gap in alignment
-		TailGapI = alignLenI - len(Seqs.rstrip("-")) #count tail gap in alignment
-		InnerGapI = AllGapI - (HeadGapI + TailGapI) #count inner gap in alignment
-		GapOpenI = len([x for x in Seqs.strip("-").split("-") if len(x) > 0]) - 1 #count inner gap opening in alignment
-		FragmentL = sorted([x for x in re.sub('\-+','-',Seqs).split('-') if len(x) != 0], key=lambda x:len(x))
-		FragNumI = len(FragmentL)
-		LargeRatioF = len(FragmentL[-1])/self.SeqlenI
-		SmallRatioF = len(FragmentL[0])/self.SeqlenI
+		self.alignLenI = len(Seqs.replace('-',''))
+		self.AllGapI = Seqs.count("-")
+		self.HeadGapI = self.alignLenI - len(Seqs.lstrip("-")) #count lead gap in alignment
+		self.TailGapI = self.alignLenI - len(Seqs.rstrip("-")) #count tail gap in alignment
+		self.InnerGapI = self.AllGapI - (self.HeadGapI + self.TailGapI) #count inner gap in alignment
+		self.GapOpenI = len([x for x in Seqs.strip("-").split("-") if len(x) > 0]) - 1 #count inner gap opening in alignment
+		self.FragmentL = sorted([x for x in re.sub('\-+','-',Seqs).split('-') if len(x) != 0], key=lambda x:len(x))
+		self.FragNumI = len(self.FragmentL)
+		self.LargeRatioF = float(len(self.FragmentL[-1]))/float(self.SeqlenI)
+		SmallRatioF = float(len(self.FragmentL[0]))/float(self.SeqlenI)
 		N50F = 0.0
-		for i in FragmentL:
-			
-		if SmallRatioF == LargeRatioF:
-			SmallRatioF = 0.0
-		scoredL = [alignLenI, AllGapI, HeadGapI, TailGapI, InnerGapI, GapOpenI, FragNumI, LargeRatioF, SmallRatioF]
+		iterNumI = 0
+		while N50F < 0.5:
+			N50F = N50F + float(len(self.FragmentL[-1*iterNumI]))/float(self.SeqlenI)
+			iterNumI += 1
+		self.N50F = N50F
+		self.N50NumI = iterNumI
+		if SmallRatioF == self.LargeRatioF:
+			self.SmallRatioF = 0.0
+		self.SmallRatioF = SmallRatioF
+		scoredL = [self.alignLenI, self.AllGapI, self.HeadGapI, self.TailGapI, self.InnerGapI, self.GapOpenI, self.FragNumI, self.LargeRatioF, self.SmallRatioF, self.N50F, self.N50NumI]
 		return 	scoredL
 
 

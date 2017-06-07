@@ -66,7 +66,7 @@ class hit(object):
 		self.bitscoreF = float(self.AttributesL[11])
 		self.slenI = int(self.AttributesL[12])
 		self.qlenI = int(self.AttributesL[13])
-		self.qcovsF = float(abs(self.qendI - self.qstartI)/self.qlenI)
+		self.qcovsF = float(abs(self.qendI - self.qstartI))/float(self.qlenI)
 
 def Pgroup(selectOJBL):
 	nameL = [] ##create empty list to contain contigs names
@@ -413,7 +413,8 @@ def BlastHitJoiner2(HitL):
 			STDERR("Seq0OBJ.name=",Seq0OBJ.nameS,Seq0OBJ.FragNumI,Seq0OBJ.LargeRatioF,Seq0OBJ.SmallRatioF,Seq0OBJ.HeadGapI,Seq0OBJ.TailGapI,Seq0OBJ.GapRatioF) ##DEBUG
 			STDERR("Seq1OBJ.name=",Seq1OBJ.nameS,Seq1OBJ.FragNumI,Seq1OBJ.LargeRatioF,Seq1OBJ.SmallRatioF,Seq1OBJ.HeadGapI,Seq1OBJ.TailGapI,Seq1OBJ.GapRatioF) ##DEBUG
 			#if Seq0OBJ.FragNumI < 3 and Seq1OBJ.FragNumI < 3 and Seq0OBJ.GapRatioF < 0.1 and Seq1OBJ.GapRatioF < 0.1:
-			if Seq1OBJ.nameS not in UsedNameL and  Seq0OBJ.LargeRatioF > 0.9 and Seq1OBJ.LargeRatioF > 0.9 :
+			#if Seq1OBJ.nameS not in UsedNameL and  Seq0OBJ.LargeRatioF > 0.9 and Seq1OBJ.LargeRatioF > 0.9 :
+			if Seq1OBJ.nameS not in UsedNameL and ( ( Seq0OBJ.LargeRatioF > 0.25 and Seq0OBJ.N50NumI < 3 and Seq1OBJ.LargeRatioF > 0.25 and Seq1OBJ.N50NumI < 3 ) or ( Seq0OBJ.GapRatioF < __GAPLIMITF__  and Seq1OBJ.GapRatioF < __GAPLIMITF__ ) ):
 				
 									
 				NextSeqS = ">" + Seq1OBJ.nameS +"\n"+ Seq1OBJ.SeqS.replace("-","")
@@ -441,6 +442,28 @@ def BlastHitJoiner2(HitL):
 	STDERR("BlastHitJoiner.UsedNameL",UsedNameL)
 	STDERR("BlastHitJoiner.GroupL",GroupL)
 	return [GroupL, MergedL]
+
+def FinalScore(OBJL,SeqS):
+	SeqNameSL = [x for x in SeqS.splitlines()[0].replace(">","").replace("lcl|","").split()[0].split("_") if x != "merged" ]
+	STDERR("FinalScore.SeqNameSL",SeqNameSL)
+	sortedOBJL = sorted([x for x in OBJL if x.qseqidS.replace("lcl|","") in SeqNameSL], key=lambda x:x.bitscoreF )[::-1]
+	TMPL = []
+	UseNameSL = []
+	for i in sortedOBJL:
+		if i.qseqidS not in UseNameSL:
+			TMPL.append(i)
+
+	SumBitF = sum([x.bitscoreF for x in TMPL])
+	SlenI = TMPL[0].slenI
+	MemberNumI = len(sortedOBJL)
+	StartIOBJ = sorted(TMPL, key=lambda x:min(x.sstartI,x.sendI))[0]
+	StartI = min(StartIOBJ.sstartI,StartIOBJ.sendI)
+	EndIOBJ = sorted(TMPL, key=lambda x:max(x.sstartI,x.sendI))[-1]
+	EndI =  max(StartIOBJ.sstartI,StartIOBJ.sendI)
+	SumCovF = float(EndI - StartI)
+	EvCovF = SumCovF/float(SlenI)
+	EvBitF = sum([x.bitscoreF/x.qcovsF for x in sortedOBJL])/float(MemberNumI)
+	return [StartI,EndI,SumCovF, EvCovF, SumBitF, EvBitF]
 
 
 def main2(INS,TresholdF):
@@ -483,14 +506,16 @@ def main2(INS,TresholdF):
 				TMPendI = max([max(x.sstartI, x.sendI) for x in TMPobjL])
 				outS = outS + "\n#"+ str(TMPstartI) + "-" + str(TMPendI) + "\t" + ' '.join(i)
 
-			LV2MergedSeqSL = SeqsMerger(MergedSeqSL)
-			STDERR("main2.LV2MergedSeqSL[0]",LV2MergedSeqSL[0])##DEBUG
+			if __MergedFlagS__ != "0":
 
-			MergedSeqsS = '\n'.join([x.splitlines()[0].split()[0] +" "+ CrPnameS +'\n'+ '\n'.join(x.splitlines()[1:]) for x in LV2MergedSeqSL[1]]) + "\n"
-			STDERR("main2.LV2MergedSeqSL",LV2MergedSeqSL[0])##DEBUG
+				LV2MergedSeqSL = SeqsMerger(MergedSeqSL)
+				STDERR("main2.LV2MergedSeqSL[0]",LV2MergedSeqSL[0])##DEBUG
+
+				MergedSeqsS = '\n'.join([x.splitlines()[0].split()[0].replace("lcl|","") +" "+ CrPnameS +" " + str(FinalScore(OBJL,x)) +'\n'+ '\n'.join(x.splitlines()[1:]) for x in LV2MergedSeqSL[1]]) + "\n"
+				STDERR("main2.LV2MergedSeqSL",LV2MergedSeqSL[0])##DEBUG
 
 			
-			outS = outS + "\n###MERGED SEQ for "+ CrPnameS +"##\n"	+ MergedSeqsS
+				outS = outS + "\n###MERGED SEQ for "+ CrPnameS +"##\n"	+ MergedSeqsS
 
 		else:
 			
@@ -510,8 +535,10 @@ opt.add_option("-o",help="indicate output file name or print out as standard out
 opt.add_option("-e",help="E-value cutoff for selected hit",default="0.1")
 opt.add_option("-c",help="query-length covery rate cutoff for selected hit",default="0.98")
 opt.add_option("-t",help="cutoff for pool protein coverage treshold",default="0.9")
-opt.add_option("--TAG",help="Spicies Tag in protein name",default="0",dest="TAG")
+opt.add_option("--MergedFlagS",help="MergedFlagS to output merged sequences",default="1",dest="MergedFlagS")
 opt.add_option("--NlimitF",help="Maximum N ratio allowed in Consensus 0.0 to 1.0",default="0.05",dest="NlimitF")
+opt.add_option("--GAPLIMITF",help="Maximum GAP ratio allowed in alignment 0.0 to 1.0",default="0.1",dest="GAPLIMITF")
+opt.add_option("--TAG",help="Spicies Tag in protein name",default="0",dest="TAG")
 opt.add_option("-q",help="*query database path",dest='q',default="DB_PATH")
 
 (options, args) = opt.parse_args()
@@ -524,6 +551,8 @@ __DBname__ = options.q ;STDERR("__DBname__ = ",__DBname__)
 __TresholdF__ = float(options.t) ;STDERR("__TresholdF__ = ",__TresholdF__)
 __NlimitF__ = float(options.NlimitF) ;STDERR("__NlimitF__ = ",__NlimitF__)
 __OutTag__ = options.o ;STDERR("__OutTag__",__OutTag__)
+__MergedFlagS__ = options.MergedFlagS ;STDERR("__MergedFlagS__ ",__MergedFlagS__ )
+__GAPLIMITF__ = float(options.GAPLIMITF) ;STDERR("__GAPLIMITF__ ",__GAPLIMITF__ )
 
 if options.i == '0': ##get input from pipe
 	INS = sys.stdin.read()
