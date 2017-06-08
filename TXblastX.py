@@ -67,6 +67,7 @@ class hit(object):
 		self.slenI = int(self.AttributesL[12])
 		self.qlenI = int(self.AttributesL[13])
 		self.qcovsF = float(abs(self.qendI - self.qstartI))/float(self.qlenI)
+		self.scovsF = float(abs(self.sendI - self.sstartI))/float(self.slenI)
 
 def Pgroup(selectOJBL):
 	nameL = [] ##create empty list to contain contigs names
@@ -384,7 +385,7 @@ def BlastHitJoiner2(HitL):
 		ConInL = [[CLseqS , x] for x in ToALignSL]
 		#STDERR("BlastHitJoiner.ConInL",ConInL)
 		ChkL = [x for x in ConcurrentCall(OC.overlap, ConInL, 8)]
-		PassedL = [x for x in ChkL if x.OverlapF > 0.5]
+		PassedL = [x for x in ChkL if x.OverlapF > 0.2]
 		#STDERR("BlasthitJoiner2.PassedL",[[x.SeqS0.name(),x.SeqS1.name(),x.OverlapI,x.OverlapF,x.AI] for x in PassedL]) ##DEBUG
 		MSAInL = [x.MSA(x.AI,1) for x in PassedL]
 		#STDERR("BlasthitJoiner2.MSAInL",MSAInL) ##DEBUG		
@@ -418,8 +419,8 @@ def BlastHitJoiner2(HitL):
 				
 									
 				NextSeqS = ">" + Seq1OBJ.nameS +"\n"+ Seq1OBJ.SeqS.replace("-","")
-				STDERR("BlastHitJoiner2.FirstSeqS=",TMPmergedSeqS)##DEBUG
-				STDERR("BlastHitJoiner2.NextSeqS=",NextSeqS)##DEBUG
+				#STDERR("BlastHitJoiner2.FirstSeqS=",TMPmergedSeqS)##DEBUG
+				#STDERR("BlastHitJoiner2.NextSeqS=",NextSeqS)##DEBUG
 				TMPoverlap = OC.overlap(TMPmergedSeqS, NextSeqS)
 				STDERR("BlastHitJoiner2.TMPoverlap=",TMPoverlap.OverlapL)##DEBUG
 				ConsenseusSOBJ = FastaTool(TMPoverlap.conservedblock())
@@ -455,15 +456,16 @@ def FinalScore(OBJL,SeqS):
 
 	SumBitF = sum([x.bitscoreF for x in TMPL])
 	SlenI = TMPL[0].slenI
-	MemberNumI = len(sortedOBJL)
+	MemberNumI = len(TMPL)
 	StartIOBJ = sorted(TMPL, key=lambda x:min(x.sstartI,x.sendI))[0]
 	StartI = min(StartIOBJ.sstartI,StartIOBJ.sendI)
 	EndIOBJ = sorted(TMPL, key=lambda x:max(x.sstartI,x.sendI))[-1]
-	EndI =  max(StartIOBJ.sstartI,StartIOBJ.sendI)
+	EndI =  max(EndIOBJ.sstartI, EndIOBJ.sendI)
 	SumCovF = float(EndI - StartI)
 	EvCovF = SumCovF/float(SlenI)
-	EvBitF = sum([x.bitscoreF/x.qcovsF for x in sortedOBJL])/float(MemberNumI)
-	return [StartI,EndI,SumCovF, EvCovF, SumBitF, EvBitF]
+	EvBitF = sum([x.bitscoreF/float(x.slenI) for x in TMPL])/float(MemberNumI)
+	EvBitLenF = EvBitF*EvCovF ##Everage bitscore multiply by Everage coverage
+	return [StartI,EndI,SumCovF, EvCovF, SumBitF, EvBitF, EvBitLenF]
 
 
 def main2(INS,TresholdF):
@@ -494,7 +496,7 @@ def main2(INS,TresholdF):
 			MergedGroupL = BlastHitJoiner2(OBJL)##DEBUG
 			GroupL = MergedGroupL[0]
 			MergedSeqSL = sorted([x for x in MergedGroupL[1] if len(x) > 0], key=lambda x:len(x))[::-1]
-			STDERR("main2.MergedSeqSL",MergedSeqSL) ##DEBUG
+			#STDERR("main2.MergedSeqSL",MergedSeqSL) ##DEBUG
 			outS = outS + "\n############# Align hit position \n"
 			#STDERR("main2.GroupL=",GroupL) ##DEBUG
 			for i in GroupL:

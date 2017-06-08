@@ -70,7 +70,7 @@ class overlap(object):
 		
 		
 
-	def OverlapCall1(self,cupNumI):
+	def OverlapCall1(self,cpuNumI):
 		#SeqS0 = self.SeqS0
 		#SeqS1 = self.SeqS1
 		EndLengthI = 20		
@@ -120,7 +120,7 @@ class overlap(object):
 		H0_H1_OvI = [SeqS0R, SeqS1F,1, EndLengthI ]
 
 		
-		OverlapL = ConcurrentCall(OverlapCheck, [T0_H1_OvI, H1_T0_OvI, T0_T1_OvI, T1_T0_OvI, T1_H0_OvI, H0_T1_OvI, H1_H0_OvI, H0_H1_OvI], cupNumI)
+		OverlapL = ConcurrentCall(OverlapCheck, [T0_H1_OvI, H1_T0_OvI, T0_T1_OvI, T1_T0_OvI, T1_H0_OvI, H0_T1_OvI, H1_H0_OvI, H0_H1_OvI], cpuNumI)
 
 		return(OverlapL)
 
@@ -134,7 +134,8 @@ class overlap(object):
 		S0lenF = self.SeqS0.seqlen()*1.0
 		S1lenF = self.SeqS1.seqlen()*1.0
 		#self.dfL = [S1lenI -  self.T0_H1_OvI, S0lenI - self.H1_T0_OvI, S1lenI - self.T0_T1_OvI, S0lenI - self.T1_T0_OvI, S0lenI - self.T1_H0_OvI, S1lenI - self.H0_T1_OvI, S0lenI - self.H1_H0_OvI, S1lenI - self.H0_H1_OvI]
-		self.dfD = {'0':(S1lenF -  self.T0_H1_OvI*1.0)/S1lenF, '1':(S0lenF - self.H1_T0_OvI*1.0)/S0lenF, '2':(S1lenF - self.T0_T1_OvI*1.0)/S1lenF, '3':(S0lenF - self.T1_T0_OvI*1.0)/S0lenF, '4':(S0lenF - self.T1_H0_OvI*1.0)/S0lenF, '5':(S1lenF - self.H0_T1_OvI*1.0)/S1lenF, '6':(S0lenF - self.H1_H0_OvI*1.0)/S0lenF, '7':(S1lenF - self.H0_H1_OvI*1.0)/S1lenF}
+		#self.dfD = {'0':(S1lenF -  self.T0_H1_OvI*1.0)/S1lenF, '1':(S0lenF - self.H1_T0_OvI*1.0)/S0lenF, '2':(S1lenF - self.T0_T1_OvI*1.0)/S1lenF, '3':(S0lenF - self.T1_T0_OvI*1.0)/S0lenF, '4':(S0lenF - self.T1_H0_OvI*1.0)/S0lenF, '5':(S1lenF - self.H0_T1_OvI*1.0)/S1lenF, '6':(S0lenF - self.H1_H0_OvI*1.0)/S0lenF, '7':(S1lenF - self.H0_H1_OvI*1.0)/S1lenF}
+		self.dfD = {'0':(self.T0_H1_OvI*1.0)/S1lenF, '1':(S0lenF - self.H1_T0_OvI*1.0)/S0lenF, '2':(S1lenF - self.T0_T1_OvI*1.0)/S1lenF, '3':(S0lenF - self.T1_T0_OvI*1.0)/S0lenF, '4':(self.T1_H0_OvI*1.0)/S0lenF, '5':(S1lenF - self.H0_T1_OvI*1.0)/S1lenF, '6':(self.H1_H0_OvI*1.0)/S0lenF, '7':(self.H0_H1_OvI*1.0)/S1lenF}
 		
 		#RemainIL = [self.SeqS0.seqlen() - self.T0_H1_OvI, ]
 
@@ -186,7 +187,7 @@ class overlap(object):
 			MSAS = musclecall(">S1_REV\n"+SeqS1R+"\n>S0_FWD\n"+SeqS0F,AlignTagI)
 
 		if len(arg) == 1 and arg[0] == 1:
-			STDERR("##########MSA=",MSAS) ##DEBUG
+			#STDERR("##########MSA=",MSAS) ##DEBUG
 			MSASL = [">"+x for x in MSAS.split(">") if len(x) > 3]
 			FirstSeq = [x for x in MSASL if x.find("S0_") != -1][0]
 			SecondSeq = [x for x in MSASL if x.find("S1_") != -1][0]
