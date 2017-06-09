@@ -726,7 +726,7 @@ def main0(INS):
 		if options.o != '0':
 			f.write(consensusS)
 		else:
-			print consensusS.strip()
+			print(consensusS.strip())
 
 	if options.o != '0':		
 		f.close()

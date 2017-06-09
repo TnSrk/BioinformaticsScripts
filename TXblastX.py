@@ -445,7 +445,7 @@ def BlastHitJoiner2(HitL):
 	return [GroupL, MergedL]
 
 def FinalScore(OBJL,SeqS):
-	SeqNameSL = [x for x in SeqS.splitlines()[0].replace(">","").replace("lcl|","").split()[0].split("_") if x != "merged" ]
+	SeqNameSL = [x for x in SeqS.splitlines()[0].replace(">","").replace("lcl|","").split()[0].split("_:") if x != "merged"  ]
 	STDERR("FinalScore.SeqNameSL",SeqNameSL)
 	sortedOBJL = sorted([x for x in OBJL if x.qseqidS.replace("lcl|","") in SeqNameSL], key=lambda x:x.bitscoreF )[::-1]
 	TMPL = []

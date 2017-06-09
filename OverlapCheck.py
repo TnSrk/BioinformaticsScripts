@@ -200,11 +200,11 @@ class overlap(object):
 		STDERR("+++++++++++++ merge INPUT +++++++++++++++++") ##DEBUG
 		
 		
-		mergedS = ">merged_" + self.SeqS0.name() +"_"+ self.SeqS1.name() + "\n" + consensusExtractKW(self.MSA(self.AI, 1),0,0,0)
+		mergedS = ">merged_:" + self.SeqS0.name() +"_:"+ self.SeqS1.name() + "\n" + consensusExtractKW(self.MSA(self.AI, 1),0,0,0)
 		return(mergedS)
 
 	def conservedblock(self):
-		conS = ">ConservedBlock " + self.SeqS0.name() +"_"+ self.SeqS1.name() + "\n" + sorted( consensusExtractKW(self.MSA(self.AI, 1),2,1,0).split("--"), key=lambda x:len(x))[-1] ##GAP WEIGHT INCREASED
+		conS = ">ConservedBlock " + self.SeqS0.name() +"_:"+ self.SeqS1.name() + "\n" + sorted( consensusExtractKW(self.MSA(self.AI, 1),2,1,0).split("--"), key=lambda x:len(x))[-1] ##GAP WEIGHT INCREASED
 		return(conS)
 
 def main():
