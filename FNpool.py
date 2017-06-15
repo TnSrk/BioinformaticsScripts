@@ -713,7 +713,7 @@ class MSAQual(object): #Take a line of alignment in fasta format then return ali
 		self.FragNumI = len(self.FragmentL)
 		self.LargeRatioF = float(len(self.FragmentL[-1]))/float(self.SeqlenI)
 		SmallRatioF = float(len(self.FragmentL[0]))/float(self.SeqlenI)
-		self.InnerGapPerSeqLenF = float(self.InnerGapI)/float(len(Seqs.replace("-",'')))
+		self.InnerGapPerSeqLenF = float(self.InnerGapI)/float(len(Seqs.lstrip("-").rstrip("-")))
 		N50F = 0.0
 		iterNumI = 0
 		while N50F < 0.5:
