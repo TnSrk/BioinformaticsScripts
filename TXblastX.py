@@ -411,11 +411,11 @@ def BlastHitJoiner2(HitL):
 			#STDERR(i)
 			Seq0OBJ = i[0]
 			Seq1OBJ = i[1]
-			STDERR("Seq0OBJ.name=",Seq0OBJ.nameS,Seq0OBJ.FragNumI,Seq0OBJ.LargeRatioF,Seq0OBJ.SmallRatioF,Seq0OBJ.HeadGapI,Seq0OBJ.TailGapI,Seq0OBJ.GapRatioF) ##DEBUG
-			STDERR("Seq1OBJ.name=",Seq1OBJ.nameS,Seq1OBJ.FragNumI,Seq1OBJ.LargeRatioF,Seq1OBJ.SmallRatioF,Seq1OBJ.HeadGapI,Seq1OBJ.TailGapI,Seq1OBJ.GapRatioF) ##DEBUG
+			STDERR("Seq0OBJ.name=",Seq0OBJ.nameS,Seq0OBJ.FragNumI,Seq0OBJ.LargeRatioF,Seq0OBJ.SmallRatioF,Seq0OBJ.HeadGapI,Seq0OBJ.TailGapI,Seq0OBJ.GapRatioF,Seq0OBJ.AllGapI,Seq0OBJ.InnerGapPerSeqLenF) ##DEBUG
+			STDERR("Seq1OBJ.name=",Seq1OBJ.nameS,Seq1OBJ.FragNumI,Seq1OBJ.LargeRatioF,Seq1OBJ.SmallRatioF,Seq1OBJ.HeadGapI,Seq1OBJ.TailGapI,Seq1OBJ.GapRatioF, Seq1OBJ.AllGapI, Seq1OBJ.InnerGapPerSeqLenF) ##DEBUG
 			#if Seq0OBJ.FragNumI < 3 and Seq1OBJ.FragNumI < 3 and Seq0OBJ.GapRatioF < 0.1 and Seq1OBJ.GapRatioF < 0.1:
 			#if Seq1OBJ.nameS not in UsedNameL and  Seq0OBJ.LargeRatioF > 0.9 and Seq1OBJ.LargeRatioF > 0.9 :
-			if Seq1OBJ.nameS not in UsedNameL and ( ( Seq0OBJ.LargeRatioF > 0.25 and Seq0OBJ.N50NumI < 3 and Seq1OBJ.LargeRatioF > 0.25 and Seq1OBJ.N50NumI < 3 ) or ( Seq0OBJ.GapRatioF < __GAPLIMITF__  and Seq1OBJ.GapRatioF < __GAPLIMITF__ ) ):
+			if Seq1OBJ.nameS not in UsedNameL and ( Seq0OBJ.InnerGapPerSeqLenF < 0.1 and Seq1OBJ.InnerGapPerSeqLenF < 0.1  ) and ( ( Seq0OBJ.LargeRatioF > 0.25 and Seq0OBJ.N50NumI < 3 and Seq1OBJ.LargeRatioF > 0.25 and Seq1OBJ.N50NumI < 3 ) or ( Seq0OBJ.GapRatioF < __GAPLIMITF__  and Seq1OBJ.GapRatioF < __GAPLIMITF__ ) ):
 				
 									
 				NextSeqS = ">" + Seq1OBJ.nameS +"\n"+ Seq1OBJ.SeqS.replace("-","")

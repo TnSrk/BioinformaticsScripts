@@ -705,14 +705,15 @@ class MSAQual(object): #Take a line of alignment in fasta format then return ali
 	def AlignScore(self,Seqs):
 		self.alignLenI = len(Seqs.replace('-',''))
 		self.AllGapI = Seqs.count("-")
-		self.HeadGapI = self.alignLenI - len(Seqs.lstrip("-")) #count lead gap in alignment
-		self.TailGapI = self.alignLenI - len(Seqs.rstrip("-")) #count tail gap in alignment
+		self.HeadGapI = self.AllGapI - len(Seqs.lstrip("-")) #count lead gap in alignment
+		self.TailGapI = self.AllGapI - len(Seqs.rstrip("-")) #count tail gap in alignment
 		self.InnerGapI = self.AllGapI - (self.HeadGapI + self.TailGapI) #count inner gap in alignment
 		self.GapOpenI = len([x for x in Seqs.strip("-").split("-") if len(x) > 0]) - 1 #count inner gap opening in alignment
 		self.FragmentL = sorted([x for x in re.sub('\-+','-',Seqs).split('-') if len(x) != 0], key=lambda x:len(x))
 		self.FragNumI = len(self.FragmentL)
 		self.LargeRatioF = float(len(self.FragmentL[-1]))/float(self.SeqlenI)
 		SmallRatioF = float(len(self.FragmentL[0]))/float(self.SeqlenI)
+		self.InnerGapPerSeqLenF = float(self.InnerGapI)/float(len(Seqs.replace("-",'')))
 		N50F = 0.0
 		iterNumI = 0
 		while N50F < 0.5:
