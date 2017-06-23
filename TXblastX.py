@@ -3,7 +3,7 @@
 ##Takes input from blastx with -outfmt '6 qseqid sseqid pident length mismatch gapopen qstart qend sstart send evalue bitscore slen qlen qcovs' option
 import OverlapCheck as OC
 from SeqsMerger import SeqsMerger
-from FNpool import ConcurrentCall, MSACheck as MCK, FastaTool
+from FNpool import ConcurrentCall, MSACheck as MCK, FastaTool, BlastHitGroup 
 import sys,optparse, copy, subprocess, re
 from concurrent.futures import ProcessPoolExecutor
 from time import sleep
@@ -89,8 +89,8 @@ def Pgroup(selectOJBL):
 
 
 def merge5(Ori_inputlistOBJ,coverage):
-	inputlistOBJ = copy.deepcopy(Ori_inputlistOBJ)
-	a = sorted(inputlistOBJ, key = lambda x:abs(x.sstartI - x.sendI) )[::-1]
+	inputlistOBJ = copy.deepcopy(Ori_inputlistOBJ) #create new list of input blast results
+	a = sorted(inputlistOBJ, key = lambda x:abs(x.sstartI - x.sendI) )[::-1] #sort by matched length 
 	clustL = []
 
 	while len(a) > 0:
@@ -304,23 +304,6 @@ class FastaTool0(object): ## class for manipulate sequences in fasta format
 		
 		self.seqLenI = len(self.seqonly())
 		return self.seqLenI
-	
-def BlastXHitGroup(HitL,SimilarityF,InnerGapLimitI): ## Aling Each match Sequences to target sequences then pick only one with no gap more than threshold
-	SortedHitL = sorted(HitL, key = lambda x:x.bitscoreF)[::-1] ##sort by hit-bitscore 
-
-	groupedL =  merge5(SortedHitL,0.75)
-
-	TEMPSEQL = []
-	for group in groupedL:
-		inL = [[x ,__DBname__] for x in group]
-		ToALignSL = ConcurrentCall(QuerySeq,inL, 10)
-		TEMPSEQL.append( '\n'.join([ x.decode("utf-8") for x in ToALignSL]) )
-
-	ConInL = [[x] for x in TEMPSEQL]
-	#STDERR("TEMPSEQL=",TEMPSEQL)
-	MSAL = ConcurrentCall(musclecallCLW,ConInL, 20)
-	#STDERR("MSAL=",MSAL)
-	return MSAL
 
 def OverlapHit(HitOBJ1,HitOBJ2):#get two blast hit object return 0 if match position on subject not overlap else return 1
 	#1 --------------        #1    ----------------
@@ -363,7 +346,16 @@ def MSACheck(MSAS): #Check consistency of MSA
 	#STDERR("MSACheck.scoredL",scoredL)
 	return scoredL
 
+def BlastHitJoiner3(HitL): ## Takes Input as Blast Hit, Return Joint Sequences and Names List of Each Group
+	BigClustL = BlastHitGroup(HitL,0.8) ## Grouping blasthit
+	BigOutL = [] 
+	for ClustL in BigClustL:
+		inL = [[x ,__DBname__] for x in ClustL] ##Prepare Input
+		SeqSL = [x.decode("utf-8") for x in ConcurrentCall(QuerySeq, inL, 10)] ## Pull sequences from DB
+		MergedL = SeqsMerger(SeqSL) ## Merged Sequences
+		BigOutL.append(MergedL)
 
+	return(BigOutL)
 
 def BlastHitJoiner2(HitL):
 	SortedHitL = sorted(HitL, key = lambda x:x.bitscoreF)[::-1] ##sort by hit-bitscore
@@ -489,18 +481,24 @@ def main2(INS,TresholdF):
 		TXnumS = str(len(ScoreFL[0]))
 		outS = outS + "#" + '\n#'.join(['\t'.join((x.AttributesL)) for x in sortedOBJL]) + "\n#PoolCovScpre=\t" + str(ScoreFL[1]) +"\t"+ ScoreFL[0][0][1] + "\tTXnumS=\t"+TXnumS +  "\n############\n"		
 		outS = outS + "#" + str(ScoreFL[0]).replace("""],""","""]\n""") + "\n############\n"
-		##tempolary marked ##MSAL = [ x.decode('utf-8') for x in BlastXHitGroup(OBJL,0.98,0) ]
 		#STDERR("TEMPSEQ") ##DEBUG
 		#STDERR(''.join(MSAL)) ##DEBUG
 		if ScoreFL[1] > TresholdF:
-			MergedGroupL = BlastHitJoiner2(OBJL)##DEBUG
-			GroupL = MergedGroupL[0]
-			MergedSeqSL = sorted([x for x in MergedGroupL[1] if len(x) > 0], key=lambda x:len(x))[::-1]
+			#MergedGroupL = BlastHitJoiner2(OBJL)##DEBUG
+			MergedGroupL = BlastHitJoiner3(OBJL)
+			for g in MergedGroupL: ##DEBUG
+				for gg in g:
+					STDERR("main2.MergedGroupL.subGroup.eachGroup=",gg) ##DEBUG
+			#GroupL = MergedGroupL[0]
+			GroupL = [x[1] for x in MergedGroupL]
+			#MergedSeqSL = sorted([x for x in MergedGroupL[1] if len(x) > 0], key=lambda x:len(x))[::-1]
+			MergedSeqSL = sorted([x[0] for x in MergedGroupL if len(x[0]) > 0], key=lambda x:len(x))[::-1]
 			#STDERR("main2.MergedSeqSL",MergedSeqSL) ##DEBUG
 			outS = outS + "\n############# Align hit position \n"
-			#STDERR("main2.GroupL=",GroupL) ##DEBUG
+			STDERR("main2.GroupL=",GroupL) ##DEBUG
 			for i in GroupL:
 				TMPobjL  = []
+				STDERR("main2.GroupL.i=",i) ##DEBUG
 				for ii in i:
 					TMPobjL.append([x for x in sortedOBJL if x.qseqidS.replace("lcl|","") == ii][0])
 				
@@ -508,6 +506,168 @@ def main2(INS,TresholdF):
 				TMPendI = max([max(x.sstartI, x.sendI) for x in TMPobjL])
 				outS = outS + "\n#"+ str(TMPstartI) + "-" + str(TMPendI) + "\t" + ' '.join(i)
 
+			if __MergedFlagS__ != "0":
+
+				LV2MergedSeqSL = SeqsMerger(MergedSeqSL)
+				STDERR("main2.LV2MergedSeqSL[0]",LV2MergedSeqSL[0])##DEBUG
+
+				MergedSeqsS = '\n'.join([x.splitlines()[0].split()[0].replace("lcl|","") +" "+ CrPnameS +" " + str(FinalScore(OBJL,x)) +'\n'+ '\n'.join(x.splitlines()[1:]) for x in LV2MergedSeqSL[1]]) + "\n"
+				STDERR("main2.LV2MergedSeqSL",LV2MergedSeqSL[0])##DEBUG
+
+			
+				outS = outS + "\n###MERGED SEQ for "+ CrPnameS +"##\n"	+ MergedSeqsS
+
+		else:
+			
+			outS = outS + "\n############# Overall Coverage not pass cut-off \n"
+		
+		if __OutTag__ == '0':
+			print(outS)
+			outS = ''
+	#STDERR(group(selectOJBL)[0])
+	return outS
+
+def main3(INS,TresholdF):
+	INL = (chop(INS))
+	hitOBJL = [hit(x) for x in INL]
+	#hitOBJL = [x for x in hitOBJL if TruncateCheck(x,10) == 1] ##remove truncated hit before processing
+	selectOJBL = [x for x in hitOBJL if x.qcovsF > __QCovF__ and x.evalueF < __EvalF__]
+
+	#selectOJBL = selectOJBL[0:1000] ##DEBUG
+	#STDERR([x.AttributesL for x in selectOJBL[0:2]]) ##DEBUG
+	#STDERR("entering group function") ##DEBUG
+	outS = ''
+	#for OBJL in group(selectOJBL):
+	for OBJL in Pgroup(selectOJBL):
+		ScoreFL = GroupScore(OBJL)
+		CrPnameS = OBJL[0].sseqidS
+		STDERR("Subject ID =",CrPnameS)
+		outS = outS + "\n#Grouping Sequences For "+ CrPnameS + "\n"
+		
+		sortedOBJL = sorted( OBJL, key=lambda x:( (x.sstartI + x.sendI)/2 ,min(x.sstartI, x.sendI) ) )
+		TXnumS = str(len(ScoreFL[0]))
+		outS = outS + "#" + '\n#'.join(['\t'.join((x.AttributesL)) for x in sortedOBJL]) + "\n#PoolCovScpre=\t" + str(ScoreFL[1]) +"\t"+ ScoreFL[0][0][1] + "\tTXnumS=\t"+TXnumS +  "\n############\n"		
+		outS = outS + "#" + str(ScoreFL[0]).replace("""],""","""]\n""") + "\n############\n"
+		#STDERR("TEMPSEQ") ##DEBUG
+		#STDERR(''.join(MSAL)) ##DEBUG
+		if ScoreFL[1] > TresholdF:
+			#MergedGroupL = BlastHitJoiner2(OBJL)##DEBUG
+			MergedGroupL = BlastHitJoiner3(OBJL)
+			MergedGroupL2D = []
+			for g in MergedGroupL: ##DEBUG
+				for gg in g:
+					STDERR("main2.MergedGroupL.subGroup.eachGroup=",gg) ##DEBUG
+					MergedGroupL2D.append(gg)
+			#GroupL = MergedGroupL[0]
+			GroupL = [x[1] for x in MergedGroupL2D]
+			#MergedSeqSL = sorted([x for x in MergedGroupL[1] if len(x) > 0], key=lambda x:len(x))[::-1]
+			MergedSeqSL = sorted([x[0] for x in MergedGroupL2D if len(x[0]) > 0], key=lambda x:len(x))[::-1]
+			#STDERR("main2.MergedSeqSL",MergedSeqSL) ##DEBUG
+			outS = outS + "\n############# Align hit position \n"
+			STDERR("main2.GroupL=",GroupL) ##DEBUG
+			for i in GroupL:
+				TMPobjL  = []
+				STDERR("main2.GroupL.i=",i) ##DEBUG
+				for ii in i:
+					TMPobjL.append([x for x in sortedOBJL if x.qseqidS.replace("lcl|","") == ii][0])
+				
+				TMPstartI = min([min(x.sstartI, x.sendI) for x in TMPobjL])
+				TMPendI = max([max(x.sstartI, x.sendI) for x in TMPobjL])
+				outS = outS + "\n#"+ str(TMPstartI) + "-" + str(TMPendI) + "\t" + ' '.join(i)
+
+			if __MergedFlagS__ != "0":
+
+				LV2MergedSeqSL = SeqsMerger(MergedSeqSL)
+				LV3MergedSeqSL = [x[0] for x in LV2MergedSeqSL]
+				STDERR("main2.LV2MergedSeqSL[0]",LV2MergedSeqSL[0])##DEBUG
+				
+
+				MergedSeqsS = '\n'.join([x.splitlines()[0].split()[0].replace("lcl|","") +" "+ CrPnameS +" " + str(FinalScore(OBJL,x)) +'\n'+ '\n'.join(x.splitlines()[1:]) for x in LV3MergedSeqSL]) + "\n"
+				#STDERR("main2.LV2MergedSeqSL",LV2MergedSeqSL[0])##DEBUG
+
+			
+				outS = outS + "\n###MERGED SEQ for "+ CrPnameS +"##\n"	+ MergedSeqsS
+
+		else:
+			
+			outS = outS + "\n############# Overall Coverage not pass cut-off \n"
+		
+		if __OutTag__ == '0':
+			print(outS)
+			outS = ''
+	#STDERR(group(selectOJBL)[0])
+	return outS
+
+def main3OLD(INS,TresholdF):
+	INL = (chop(INS))
+	hitOBJL = [hit(x) for x in INL]
+	#hitOBJL = [x for x in hitOBJL if TruncateCheck(x,10) == 1] ##remove truncated hit before processing
+	selectOJBL = [x for x in hitOBJL if x.qcovsF > __QCovF__ and x.evalueF < __EvalF__]
+
+	#selectOJBL = selectOJBL[0:1000] ##DEBUG
+	#STDERR([x.AttributesL for x in selectOJBL[0:2]]) ##DEBUG
+	#STDERR("entering group function") ##DEBUG
+	outS = ''
+	#for OBJL in group(selectOJBL):
+	for OBJL in Pgroup(selectOJBL):
+		ScoreFL = GroupScore(OBJL)
+		CrPnameS = OBJL[0].sseqidS
+		STDERR("Subject ID =",CrPnameS)
+		outS = outS + "\n#Grouping Sequences For "+ CrPnameS + "\n"
+		
+		sortedOBJL = sorted( OBJL, key=lambda x:( (x.sstartI + x.sendI)/2 ,min(x.sstartI, x.sendI) ) )
+		TXnumS = str(len(ScoreFL[0]))
+		outS = outS + "#" + '\n#'.join(['\t'.join((x.AttributesL)) for x in sortedOBJL]) + "\n#PoolCovScpre=\t" + str(ScoreFL[1]) +"\t"+ ScoreFL[0][0][1] + "\tTXnumS=\t"+TXnumS +  "\n############\n"		
+		outS = outS + "#" + str(ScoreFL[0]).replace("""],""","""]\n""") + "\n############\n"
+		#STDERR("TEMPSEQ") ##DEBUG
+		#STDERR(''.join(MSAL)) ##DEBUG
+		if ScoreFL[1] > TresholdF:
+			#MergedGroupL = BlastHitJoiner2(OBJL)##DEBUG
+			MergedGroupL3D = BlastHitJoiner3(OBJL)
+			GroupNumI = 0
+			MergedGroupL2D = []
+			#STDERR("MergedGroupL3D=",MergedGroupL3D)
+			for g in MergedGroupL3D:
+				for i in range(len(g)):
+					#gg.append(GroupNumI)
+					MergedGroupL2D.append(g[i])
+				GroupNumI += 1
+			#del MergedGroupL3D
+			#STDERR("MergedGroupL2D=",str(MergedGroupL2D))
+			
+			#SortedMergedGroupL2D = sorted(MergedGroupL2D, key=lambda x:len(x[0]))[::-1]
+			#MergedGroupL2D = SortedMergedGroupL2D
+			MergedNameL = []
+			OutSeqsL = []
+			STDERR("Before while loop")
+			while len(MergedGroupL2D) > 0:
+				STDERR("Entering while loop")
+				CurrentSeqSL = MergedGroupL2D.pop(0) 
+				ToMergeL = [x for x in MergedGroupL2D if x[-1] != CurrentSeqSL[-1]]
+				ToMergeSeqsL = [x[0] for x in ToMergeL]
+				TMPseqL = SeqsMerger(ToMergeSeqsL)
+				STDERR("While.TMPseqL=",TMPseqL) ##DEBUG
+				AnchorNameL = CurrentSeqSL[1]
+				MergedNameL.append(AnchorNameL)
+				FlagI = 0
+				while FlagI == 0:
+					for i in TMPseqL:
+						for name in AnchorNameL:
+							if name in i[1]:
+								AnchorSeqOutL = i
+								FlagI = 1
+				
+				OutSeqsL.append(AnchorSeqOutL)
+				
+				
+		
+			#GroupL = MergedGroupL[0]
+			GroupL = [x[1] for x in MergedGroupL]
+			#MergedSeqSL = sorted([x for x in MergedGroupL[1] if len(x) > 0], key=lambda x:len(x))[::-1]
+			MergedSeqSL = sorted([x[0] for x in MergedGroupL if len(x[0]) > 0], key=lambda x:len(x))[::-1]
+			#STDERR("main2.MergedSeqSL",MergedSeqSL) ##DEBUG
+			outS = outS + "\n############# Align hit position \n"
+			
 			if __MergedFlagS__ != "0":
 
 				LV2MergedSeqSL = SeqsMerger(MergedSeqSL)
@@ -564,10 +724,10 @@ else:#open file
 	INS = f.read()
 	f.close()
 if __OutTag__ == '0': ##print output to pipe
-	print(main2(INS,__TresholdF__))
+	print(main3(INS,__TresholdF__))
 else:#write output to a flie
 	f=open(options.o,'w')
-	f.write(Main2(INS,__TresholdF__))
+	f.write(main3(INS,__TresholdF__))
 	f.close()	
 
 

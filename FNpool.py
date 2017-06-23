@@ -12,7 +12,7 @@
 ## use simple match in realign
 ## 2014Oct27 exclude unitigname which used
 
-import sys,  subprocess, optparse, re, time
+import sys,  subprocess, optparse, re, time, copy
 from time import sleep
 from multiprocessing import Pool, cpu_count
 from concurrent.futures import ProcessPoolExecutor
@@ -185,7 +185,46 @@ class FastaTool(object): ## class for manipulate sequences in fasta format
 		
 		seqLenI = len(self.seqonly())
 		return seqLenI
+def BlastHitGroup(Ori_inputlistOBJ,coverage):
+	inputlistOBJ = copy.deepcopy(Ori_inputlistOBJ) #create new list of input blast results
+	a = sorted(inputlistOBJ, key = lambda x:abs(x.sstartI - x.sendI) )[::-1] #sort by matched length 
+	clustL = []
 
+	while len(a) > 0:
+	
+		mark = a.pop(0)
+		#clustL.append([])
+
+		Mhead = min(mark.sstartI,mark.sendI)
+		Mtail = max(mark.sstartI,mark.sendI)
+		Mlength = abs(mark.sendI - mark.sstartI)
+		
+		## <------------------->
+		##    <------------->
+		temp = [x for x in a if min(x.sstartI,x.sendI) >= Mhead and max(x.sendI, x.sstartI) <= Mtail] #and abs(x.sendI - x.sstartI) > (coverage* Mlength)]
+
+		##    <------------------->
+		## <------------------>
+		temp2 = [x for x in a if max(x.sendI, x.sstartI) < Mtail and min(x.sendI, x.sstartI) <= Mhead and ( max(x.sendI, x.sstartI) - Mhead ) >= coverage*(abs(x.sendI - x.sstartI))] 
+		temp2 = [x for x in temp2 if x not in temp]
+
+		temp = temp + temp2
+		
+		## <------------------->
+		##     <------------------>		
+		temp2 = [x for x in a if min(x.sendI, x.sstartI) > Mhead and max(x.sendI, x.sstartI) > Mtail and (Mtail - min(x.sendI,x.sstartI)) >= coverage*(abs(x.sendI - x.sstartI))] 
+		temp2 = [x for x in temp2 if x not in temp]
+
+		temp = temp + temp2
+		temp = sorted(temp, key=lambda temp:temp.sstartI)
+		
+		a = [x for x in a if x not in temp]
+		pick = [x for x in temp]
+		pick.insert(0,mark) 
+		clustL.append(pick) 
+	del(inputlistOBJ)
+	del(a)
+	return clustL
 def realign(fastaMsaS):
 	SeqsL = fastaMsaS.split('>')
 	SeqsL = ['>' + x.strip() for x in SeqsL if len(x) > 0]
