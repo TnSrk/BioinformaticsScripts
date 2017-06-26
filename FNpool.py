@@ -222,8 +222,8 @@ def BlastHitGroup(Ori_inputlistOBJ,coverage):
 		pick = [x for x in temp]
 		pick.insert(0,mark) 
 		clustL.append(pick) 
-	del(inputlistOBJ)
-	del(a)
+	#del(inputlistOBJ)
+	#del(a)
 	return clustL
 def realign(fastaMsaS):
 	SeqsL = fastaMsaS.split('>')
