@@ -199,12 +199,14 @@ class overlap(object):
 	def merge(self):
 		STDERR("+++++++++++++ merge INPUT +++++++++++++++++") ##DEBUG
 		
-		
 		mergedS = ">merged_:" + self.SeqS0.name() +"_:"+ self.SeqS1.name() + "\n" + consensusExtractKW(self.MSA(self.AI, 1),0,0,0)
 		return(mergedS)
 
 	def conservedblock(self):
-		conS = ">ConservedBlock " + self.SeqS0.name() +"_:"+ self.SeqS1.name() + "\n" + sorted( consensusExtractKW(self.MSA(self.AI, 1),2,1,0).split("--"), key=lambda x:len(x))[-1] ##GAP WEIGHT INCREASED
+		#STDERR("self.dfD=",self.dfD)
+		conS = ''
+		if self.AI > -1:
+			conS = ">ConservedBlock " + self.SeqS0.name() +"_:"+ self.SeqS1.name() + "\n" + sorted( consensusExtractKW(self.MSA(self.AI, 1),2,1,0).split("--"), key=lambda x:len(x))[-1] ##GAP WEIGHT INCREASED
 		return(conS)
 
 def main():
@@ -240,7 +242,7 @@ def main():
 		print("#","len(SeqS0)="+ str(overlapL.SeqS0.seqlen())) 
 		print("#","len(SeqS1)="+ str(overlapL.SeqS1.seqlen()))
 		print("#",overlapL.OverlapL)
-		print("# dfL=",overlapL.dfL)		
+		print("# dfD=",overlapL.dfD)		
 		print("#",overlapL.OverlapI)
 		print("#",overlapL.OverlapF)
 		print("#",overlapL.AI)
@@ -256,7 +258,7 @@ def main():
 		print("#","len(SeqS0)="+ str(overlapL.SeqS0.seqlen())) 
 		print("#","len(SeqS1)="+ str(overlapL.SeqS1.seqlen()))
 		print("#",overlapL.OverlapL)
-		print("# dfL=",overlapL.dfL)		
+		print("# dfD=",overlapL.dfD)		
 		print("#",overlapL.OverlapI)
 		print("#",overlapL.OverlapF)
 		print("#",overlapL.AI)

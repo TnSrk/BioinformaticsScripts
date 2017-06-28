@@ -555,9 +555,9 @@ def main3(INS,TresholdF):
 			MergedGroupL = BlastHitJoiner3(OBJL)
 			MergedGroupL2D = []
 			for g in MergedGroupL: 
-				STDERR("main3.MergedGroupL.subGroup.g=",g) ##DEBUG
+				#STDERR("main3.MergedGroupL.subGroup.g=",g) ##DEBUG
 				for gg in g:
-					STDERR("main3.MergedGroupL.subGroup.gg=",gg) ##DEBUG
+					#STDERR("main3.MergedGroupL.subGroup.gg=",gg) ##DEBUG
 					MergedGroupL2D.append(gg)
 			#GroupL = MergedGroupL[0]
 			GroupL = [x[1] for x in MergedGroupL2D]
