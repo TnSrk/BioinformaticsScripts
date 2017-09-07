@@ -197,7 +197,7 @@ class overlap(object):
 		return MSAS
 
 	def merge(self):
-		STDERR("+++++++++++++ merge INPUT +++++++++++++++++") ##DEBUG
+		#STDERR("+++++++++++++ merge INPUT +++++++++++++++++") ##DEBUG
 		
 		mergedS = ">merged_:" + self.SeqS0.name() +"_:"+ self.SeqS1.name() + "\n" + consensusExtractKW(self.MSA(self.AI, 1),0,0,0)
 		return(mergedS)

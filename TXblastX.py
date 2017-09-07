@@ -531,6 +531,7 @@ def main3(INS,TresholdF):
 	INL = (chop(INS))
 	hitOBJL = [hit(x) for x in INL]
 	#hitOBJL = [x for x in hitOBJL if TruncateCheck(x,10) == 1] ##remove truncated hit before processing
+	#STDERR([x.AttributesL for x in hitOBJL]) ##DEBUG
 	selectOJBL = [x for x in hitOBJL if x.qcovsF > __QCovF__ and x.evalueF < __EvalF__]
 
 	#selectOJBL = selectOJBL[0:1000] ##DEBUG
