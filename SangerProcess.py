@@ -80,11 +80,12 @@ output_str = ""
 def Oprint(*InStr):
     global output_str 
     output_str += "".join(InStr) + "\n"
+    print("".join(InStr) )
 ## Variable definition
 #input_file = "seqF.ab1"
 ab1FL = glob.glob("*.ab1")
 for f in ab1FL:
-    print(f)
+    #print(f)
     Oprint(f)
 
 #seqF_file = "seqF.ab1"
@@ -113,7 +114,7 @@ seqR_score_L = [x for x in SeqIO.parse(seqR_file, "abi")  ][0].letter_annotation
 
 primerFL = glob.glob("*_PRIMER.fasta")
 for f in primerFL:
-    print(f)
+    #print(f)
     Oprint(f)
 
 #primer_file = "adapterF.fasta"
@@ -128,15 +129,15 @@ primer_seq = str([x for x in primer_obj][0].seq)
 
 primer_objB = SeqIO.parse(primer_fileB, "fasta")
 primer_seqB = str([x for x in primer_objB][0].seq)
-print("+++++++ INPUT ++++++ ")
-print("Forward Sequence")
-print(str([x for x in SeqIO.parse(seqF_file, "abi")][0].seq))
-print("Reverse Sequence")
-print(str([x for x in SeqIO.parse(seqR_file, "abi")][0].seq))
-print("Forward Primer")
-print(primer_seq)
-print("Reverse Primer")
-print(primer_seqB)
+#print("+++++++ INPUT ++++++ ")
+#print("Forward Sequence")
+#print(str([x for x in SeqIO.parse(seqF_file, "abi")][0].seq))
+#print("Reverse Sequence")
+#print(str([x for x in SeqIO.parse(seqR_file, "abi")][0].seq))
+#print("Forward Primer")
+#print(primer_seq)
+#print("Reverse Primer")
+#print(primer_seqB)
 
 Oprint("+++++++ INPUT ++++++ ")
 Oprint("Forward Sequence")
@@ -198,7 +199,7 @@ gap_R_numI = alignments[0].seqB[0:alignments[0].start + 0].count("-")
 print(gap_R_numI)
 """
 
-print("+++++++ INPUT END ++++++ ")
+#print("+++++++ INPUT END ++++++ ")
 Oprint("+++++++ INPUT END ++++++ ")
 
 alignLenI = int(alignments[0].end)
@@ -226,36 +227,38 @@ for c in str(alignments[0].seqB):
     else:
         seqB_score_L.append(0)
 
-print("+++++++ ALIGNED ++++++++++++++  ")
+#print("+++++++ ALIGNED ++++++++++++++  ")
 Oprint("+++++++ ALIGNED ++++++++++++++  ")
 
 #print("score A:")
-print( "".join([ str(int(x/10)) for x in seqA_score_L]))
+#print( "".join([ str(int(x/10)) for x in seqA_score_L]))
 Oprint( "".join([ str(int(x/10)) for x in seqA_score_L]))
 
 #print()
 #print(pairwise2.format_alignment(*alignments[0]))
-print(alignments[0].seqA)
+#print(alignments[0].seqA)
 Oprint(alignments[0].seqA)
 #print()
-print(alignments[0].seqB)
+#print(alignments[0].seqB)
 Oprint(alignments[0].seqB)
 #print()
-print( "".join([ str(int(x/10)) for x in seqB_score_L]))
+#print( "".join([ str(int(x/10)) for x in seqB_score_L]))
 Oprint( "".join([ str(int(x/10)) for x in seqB_score_L]))
 #print("score B")
 
 concat_seq_str_OBJ = Seq(alignments[0].seqB[0:half_I] + alignments[0].seqA[half_I:])
-print("+++++++ JOINED ++++++++++++++  ")
+#print("+++++++ JOINED ++++++++++++++  ")
 Oprint("+++++++ JOINED ++++++++++++++  ")
 
-print("+++++ Q-Score Select ++++")
-print("len(alignments[0].seqA[a])")
-print(len(alignments[0].seqA))
-print("len(alignments[0].seqB[a])")
-print(len(alignments[0].seqB))
-print("alignLenI")
-print(alignLenI)
+Oprint("+++++ Q-Score Select ++++")
+"""
+Oprint("len(alignments[0].seqA[a])")
+Oprint(str(len(alignments[0].seqA)))
+Oprint("len(alignments[0].seqB[a])")
+Oprint(str(len(alignments[0].seqB)))
+Oprint("alignLenI")
+Oprint(str(alignLenI))
+"""
 
 gapped_align_ken_I = len(alignments[0].seqB)
 BestScoreFullSeq_str = ""
@@ -270,11 +273,11 @@ for a in range(gapped_align_ken_I):
     BestScoreFullSeq_str += curr_alphabet
     BestScoreFullScore_L.append(curr_score)
 
-print( "".join([ str(int(x/10)) for x in BestScoreFullScore_L]))
-print(BestScoreFullSeq_str)
+Oprint( "".join([ str(int(x/10)) for x in BestScoreFullScore_L]))
+Oprint(BestScoreFullSeq_str)
 cutoff_F = 40.0
-print( "".join([ cutoff(x,cutoff_F) for x in  BestScoreFullScore_L]))
-print( "Low Quality Bases (" , cutoff_F ,")=", len([ x for x in  BestScoreFullScore_L if ( x < cutoff_F ) ]) )
+Oprint( "".join([ cutoff(x,cutoff_F) for x in  BestScoreFullScore_L]))
+Oprint( "Low Quality Bases (<" , str(cutoff_F) ,")=", str(len([ x for x in  BestScoreFullScore_L if ( x < cutoff_F ) ]) ) )
 
 target_score = 50.0
 window_len = 3
@@ -288,7 +291,7 @@ while( (trim_score_F < target_score) and (curr_pos_I <= (gapped_align_ken_I - wi
     curr_pos_I += 1
 
 trimStartPos_I = curr_pos_I - 1
-print("5' Trim site",trimStartPos_I, " Mean Score=", trim_score_F)
+Oprint("5' Trim site", str(trimStartPos_I), " Mean Score=", str(trim_score_F))
 
 curr_pos_I = (gapped_align_ken_I - window_len)
 trim_score_F = 0
@@ -298,15 +301,15 @@ while( (trim_score_F < target_score) and (curr_pos_I > window_len) ):
     curr_pos_I -= 1
 
 trimEndPos_I = curr_pos_I + window_len + 1
-print("3' Trim site",trimEndPos_I, " Mean Score=", trim_score_F)
+Oprint("3' Trim site",str(trimEndPos_I), " Mean Score=", str(trim_score_F))
 
-print("trimmed_seq")
-print("".join(BestScoreFullSeq_str[trimStartPos_I:trimEndPos_I]))
-print( "".join([ str(int(x/10)) for x in  BestScoreFullScore_L[trimStartPos_I:trimEndPos_I]]))
+Oprint("trimmed_seq")
+Oprint("".join(BestScoreFullSeq_str[trimStartPos_I:trimEndPos_I]))
+Oprint( "".join([ str(int(x/10)) for x in  BestScoreFullScore_L[trimStartPos_I:trimEndPos_I]]))
 
 cutoff_F = 40.0
-print( "".join([ cutoff(x,cutoff_F) for x in  BestScoreFullScore_L[trimStartPos_I:trimEndPos_I]]))
-print( "Low Quality Bases (" , cutoff_F ,")=", len([ x for x in  BestScoreFullScore_L[trimStartPos_I:trimEndPos_I] if ( x < cutoff_F ) ]) )
+Oprint( "".join([ cutoff(x,cutoff_F) for x in  BestScoreFullScore_L[trimStartPos_I:trimEndPos_I]]))
+Oprint( "Low Quality Bases (<" , str(cutoff_F) ,")=", str(len([ x for x in  BestScoreFullScore_L[trimStartPos_I:trimEndPos_I] if ( x < cutoff_F ) ])) )
 
 
 msa_obj = MultipleSeqAlignment(
@@ -317,7 +320,11 @@ msa_obj = MultipleSeqAlignment(
     ])
 
 #print(msa_obj.alignment)
+f = open(output_fname,'w')
+f.write(output_str)
+f.close()
 
+"""
 
 print("concatenated_seq")
 Oprint("concatenated_seq")
@@ -361,7 +368,7 @@ f = open(output_fname,'w')
 f.write(output_str)
 f.close()
 
-"""
+
 for i in range(len(concat_seq_str_OBJ)):
     print(str(concat_seq_str_OBJ)[i] + "  ",end="")
     
