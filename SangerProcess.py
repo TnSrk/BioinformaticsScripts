@@ -4,9 +4,9 @@ from Bio import SeqIO
 from Bio.Seq import Seq
 #from io import StringIO
 from Bio import pairwise2
-import re
+#import re
 import glob
-import os
+#import os
 from Bio.Align import MultipleSeqAlignment
 from Bio.SeqRecord import SeqRecord
 #from Bio.Align import PairwiseAligner 
@@ -89,12 +89,12 @@ for f in ab1FL:
     Oprint(f)
 
 #seqF_file = "seqF.ab1"
-output_fname = "SangerTrimOUT.txt"
+output_fname = "SangerTrimOUT"
 
 if len(ab1FL) < 2:
     output_str = "INCORRECT INPUT OR MISSING FILE"
     print(output_str)
-    f = open(output_fname,'w')
+    f = open(output_fname + ".txt",'w')
     f.write(output_str)
     f.close()
     exit()
@@ -112,42 +112,30 @@ seqR_obj = SeqIO.parse(seqR_file, "abi")
 seqR_seq = str([x for x in seqR_obj][0].seq.reverse_complement())
 seqR_score_L = [x for x in SeqIO.parse(seqR_file, "abi")  ][0].letter_annotations["phred_quality"][::-1]
 
-primerFL = glob.glob("*_PRIMER.fasta")
-for f in primerFL:
-    #print(f)
-    Oprint(f)
-
-#primer_file = "adapterF.fasta"
-primer_file = primerFL[0]
-#primer_fileB = "adapterR.fasta"
-primer_fileB = primerFL[1]
-
-primer_obj = SeqIO.parse(primer_file, "fasta")
-primer_seq = str([x for x in primer_obj][0].seq)
-#for o in adapter_obj:
-#    adapter_seq = str( o.seq )
-
-primer_objB = SeqIO.parse(primer_fileB, "fasta")
-primer_seqB = str([x for x in primer_objB][0].seq)
-#print("+++++++ INPUT ++++++ ")
-#print("Forward Sequence")
-#print(str([x for x in SeqIO.parse(seqF_file, "abi")][0].seq))
-#print("Reverse Sequence")
-#print(str([x for x in SeqIO.parse(seqR_file, "abi")][0].seq))
-#print("Forward Primer")
-#print(primer_seq)
-#print("Reverse Primer")
-#print(primer_seqB)
 
 Oprint("+++++++ INPUT ++++++ ")
 Oprint("Forward Sequence")
 Oprint(str([x for x in SeqIO.parse(seqF_file, "abi")][0].seq))
 Oprint("Reverse Sequence")
 Oprint(str([x for x in SeqIO.parse(seqR_file, "abi")][0].seq))
-Oprint("Forward Primer")
-Oprint(primer_seq)
-Oprint("Reverse Primer")
-Oprint(primer_seqB)
+
+primerFL = glob.glob("*_PRIMER.fasta")
+if len(primerFL) == 2:
+    for f in primerFL:
+        Oprint(f)
+
+    primer_file = primerFL[0]
+    primer_fileB = primerFL[1]
+
+    primer_obj = SeqIO.parse(primer_file, "fasta")
+    primer_seq = str([x for x in primer_obj][0].seq)
+
+    primer_objB = SeqIO.parse(primer_fileB, "fasta")
+    primer_seqB = str([x for x in primer_objB][0].seq)
+    Oprint("Forward Primer")
+    Oprint(primer_seq)
+    Oprint("Reverse Primer")
+    Oprint(primer_seqB)
 
 """
 print("++++++ seF_seq")
@@ -200,7 +188,7 @@ print(gap_R_numI)
 """
 
 #print("+++++++ INPUT END ++++++ ")
-Oprint("+++++++ INPUT END ++++++ ")
+Oprint()
 
 alignLenI = int(alignments[0].end)
 half_I = int(alignLenI/2)
@@ -248,9 +236,10 @@ Oprint( "".join([ str(int(x/10)) for x in seqB_score_L]))
 
 concat_seq_str_OBJ = Seq(alignments[0].seqB[0:half_I] + alignments[0].seqA[half_I:])
 #print("+++++++ JOINED ++++++++++++++  ")
-Oprint("+++++++ JOINED ++++++++++++++  ")
+Oprint(" ")
+Oprint("+++++++ MERGED ++++++++++++++  ")
 
-Oprint("+++++ Q-Score Select ++++")
+
 """
 Oprint("len(alignments[0].seqA[a])")
 Oprint(str(len(alignments[0].seqA)))
@@ -278,6 +267,8 @@ Oprint(BestScoreFullSeq_str)
 cutoff_F = 40.0
 Oprint( "".join([ cutoff(x,cutoff_F) for x in  BestScoreFullScore_L]))
 Oprint( "Low Quality Bases (<" , str(cutoff_F) ,")=", str(len([ x for x in  BestScoreFullScore_L if ( x < cutoff_F ) ]) ) )
+Oprint(" ")
+Oprint("+++++ Q-Score Select ++++")
 
 target_score = 50.0
 window_len = 3
@@ -291,7 +282,7 @@ while( (trim_score_F < target_score) and (curr_pos_I <= (gapped_align_ken_I - wi
     curr_pos_I += 1
 
 trimStartPos_I = curr_pos_I - 1
-Oprint("5' Trim site", str(trimStartPos_I), " Mean Score=", str(trim_score_F))
+Oprint("5' Trim site ", str(trimStartPos_I), " Mean Score=", str(trim_score_F))
 
 curr_pos_I = (gapped_align_ken_I - window_len)
 trim_score_F = 0
@@ -301,9 +292,9 @@ while( (trim_score_F < target_score) and (curr_pos_I > window_len) ):
     curr_pos_I -= 1
 
 trimEndPos_I = curr_pos_I + window_len + 1
-Oprint("3' Trim site",str(trimEndPos_I), " Mean Score=", str(trim_score_F))
-
-Oprint("trimmed_seq")
+Oprint("3' Trim site ",str(trimEndPos_I), " Mean Score=", str(trim_score_F))
+Oprint(" ")
+Oprint("trimmed sequence")
 Oprint("".join(BestScoreFullSeq_str[trimStartPos_I:trimEndPos_I]))
 Oprint( "".join([ str(int(x/10)) for x in  BestScoreFullScore_L[trimStartPos_I:trimEndPos_I]]))
 
@@ -311,16 +302,46 @@ cutoff_F = 40.0
 Oprint( "".join([ cutoff(x,cutoff_F) for x in  BestScoreFullScore_L[trimStartPos_I:trimEndPos_I]]))
 Oprint( "Low Quality Bases (<" , str(cutoff_F) ,")=", str(len([ x for x in  BestScoreFullScore_L[trimStartPos_I:trimEndPos_I] if ( x < cutoff_F ) ])) )
 
+lineWidht_I = 60
+remains_len_I = len(BestScoreFullSeq_str[trimStartPos_I:trimEndPos_I])
+tmpL = BestScoreFullSeq_str[trimStartPos_I:trimEndPos_I]
+strLenI = len(tmpL)
+FinalStr = "\n>Trimmed_Sequence\n"
 
-msa_obj = MultipleSeqAlignment(
-        [  SeqRecord( Seq(BestScoreFullSeq_str), id="consensus"),
-            SeqRecord( Seq(alignments[0].seqA), id="SeqA"),
-            SeqRecord( Seq(alignments[0].seqB), id="SeqB"),
-        
-    ])
+curr_pos = 0
 
-#print(msa_obj.alignment)
-f = open(output_fname,'w')
+for i in range(1, int(strLenI/lineWidht_I) + 1):    
+    curr_pos = i*lineWidht_I
+    
+    FinalStr += str(tmpL[curr_pos - lineWidht_I:curr_pos]) + '\n'
+
+if (strLenI - curr_pos > 0):
+        FinalStr += str(tmpL[curr_pos:])
+
+FinalStr += "\n"
+
+Oprint(FinalStr)
+
+#msa_obj = MultipleSeqAlignment(
+#        [  SeqRecord( Seq(BestScoreFullSeq_str), id="consensus"),
+#            SeqRecord( Seq(alignments[0].seqA), id="SeqA"),
+#            SeqRecord( Seq(alignments[0].seqB), id="SeqB"),
+#        
+#    ])
+#Oprint(msa_obj.alignment)
+
+f = open(output_fname + ".txt",'w')
+f.write(output_str)
+f.close()
+output_str = ">SeqA\n"
+output_str += alignments[0].seqA
+output_str += "\n>Merged\n"
+output_str += "-"*trimStartPos_I + "".join(BestScoreFullSeq_str[trimStartPos_I:trimEndPos_I]) + "-"*(gapped_align_ken_I - trimEndPos_I)
+output_str += "\n>SeqB\n"
+output_str += alignments[0].seqB
+output_str += "\n"
+print(output_str)
+f = open(output_fname+".aln",'w')
 f.write(output_str)
 f.close()
 
